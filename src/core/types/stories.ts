@@ -194,7 +194,6 @@ export interface ResolvedConfig {
   endpoint: string;
   apiKey: string;
   model: string;
-  systemPrompt: string;
   authorNotes: string;
   params: ModelParams;
   prompts: PromptSettings;

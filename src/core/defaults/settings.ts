@@ -28,6 +28,7 @@ export const DEFAULT_PROMPT_SETTINGS: PromptSettings = {
   scenarioGeneratorPrompt:
     "Generate a scenario template for the following premise. " +
     "Return a JSON object with fields: name, description, systemPromptSuggestion.",
+  memoryGeneratorPrompt: "Summarize the emphasized segment of the story below."
 };
 
 export const DEFAULT_SETTINGS: GlobalSettings = {

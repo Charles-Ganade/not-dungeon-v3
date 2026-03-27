@@ -35,9 +35,6 @@ export interface Scenario {
 
   createdAt: number;
   updatedAt: number;
-
-  /** Optional cover image stored as a data URL or object URL. */
-  coverImage?: string;
 }
 
 /**
@@ -46,5 +43,4 @@ export interface Scenario {
  */
 export type LibraryItem =
   | { kind: "scenario"; data: Scenario }
-  | { kind: "story"; data: Story; scenario: Scenario }
-  | { kind: "story"; data: Story }
+  | { kind: "story"; data: Story; scenario?: Scenario }

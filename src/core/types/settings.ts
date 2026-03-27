@@ -66,6 +66,12 @@ export interface PromptSettings {
    * from selected text or a user description.
    */
   storyCardGeneratorPrompt: string;
+
+  /**
+   * Prompt sent to the model when summarizing a set of
+   * messages.
+   */
+  memoryGeneratorPrompt: string;
  
   /**
    * Prompt sent to the model when auto-generating a new
