@@ -1,8 +1,8 @@
 import { splitProps } from "solid-js";
 import { TextProps } from "./Text.types";
 import { Dynamic } from "solid-js/web";
-import { cn } from "../../../utils";
 import { textVariants } from "./Text.styles";
+import { cn } from "@/utils";
 
 export default function Text(props: TextProps) {
   const [local, others] = splitProps(props, [

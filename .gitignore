@@ -74,3 +74,4 @@ vite.config.js.timestamp-*
 
 # Misc
 *.local
+.firebase/*

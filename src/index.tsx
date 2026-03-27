@@ -3,9 +3,12 @@ import "./index.css";
 import { render } from "solid-js/web";
 import "solid-devtools";
 
-import Layout from "./layout";
+import App from "./router";
+import { initStores } from "./store";
 
 const root = document.getElementById("root");
+
+await initStores();
 
 if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
   throw new Error(
@@ -13,4 +16,4 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
   );
 }
 
-render(() => <Layout />, root!);
+render(() => <App />, root!);

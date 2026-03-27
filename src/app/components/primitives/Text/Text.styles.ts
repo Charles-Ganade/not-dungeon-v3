@@ -3,6 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 export const textVariants = cva("", {
   variants: {
     color: {
+      inherit: "text-inherit",
       base: "text-base-content",
       muted: "text-base-content/60",
       subtle: "text-base-content/40",
@@ -63,7 +64,7 @@ export const textVariants = cva("", {
   },
 
   compoundVariants: [
-    // If truncate is enabled, neutralize clamp
+   
     {
       truncate: true,
       clamp: 1,
@@ -72,7 +73,7 @@ export const textVariants = cva("", {
   ],
 
   defaultVariants: {
-    color: "base",
+    color: "inherit",
     variant: "body",
     align: "left",
     weight: "normal",

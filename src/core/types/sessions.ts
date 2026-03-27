@@ -1,25 +1,6 @@
 import { HistoryMessage, Memory, StoryCard } from "./stories";
 
 /**
- * The four "files" shown in the scripts panel.
- *
- *   input     — exports / defines onInput(ctx)
- *   buildContext — exports / defines buildContext(ctx)
- *   output    — exports / defines onOutput(ctx)
- *   library   — shared variables and helpers, executed first,
- *               its scope is available to the other three files
- *
- * All four are plain JS strings executed in a sandbox.
- * Scripts are NOT tracked by the delta/undo system.
- */
-export interface ScriptBundle {
-  library: string;
-  input: string;
-  buildContext: string;
-  output: string;
-}
-
-/**
  * A Delta describes a single reversible mutation to session
  * state. Every delta carries both the previous value and the
  * next value so it can be applied (redo) or reversed (undo)
@@ -67,6 +48,16 @@ export type Delta =
   | {
       type: "storyCard:remove";
       card: StoryCard;
+    }
+  | { 
+      type: "essentials:edit";
+      prev: string; 
+      next: string 
+    }
+  | { 
+      type: "scriptState:edit";
+      prev: string;
+      next: string
     };
 
 /**
@@ -102,24 +93,23 @@ export interface DeltaTransaction {
 export interface Session {
   /** Matches the parent Story.id. */
   storyId: string;
-
-  
-
+  /**
+   * The ordered list of HistoryMessage IDs from the root to
+   * the current leaf node.
+   */
+  activePath: string[]
   /**
    * Stack of committed transactions. The most recent is last.
    * Undo pops from this and pushes to redoStack.
    */
   undoStack: DeltaTransaction[];
-
   /**
    * Stack of undone transactions. Cleared whenever a new
    * transaction is committed (standard undo-tree behaviour).
    */
   redoStack: DeltaTransaction[];
-
   /** True while the engine is mid-turn (generating or running hooks). */
   isGenerating: boolean;
-
   /**
    * ID of the transaction currently being assembled by the engine.
    * The engine opens a transaction on send, accumulates deltas,

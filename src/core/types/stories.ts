@@ -1,5 +1,23 @@
 import type { ModelParams, PromptSettings } from "./settings";
-import type { ScriptBundle } from "./sessions";
+
+/**
+ * The four "files" shown in the scripts panel.
+ *
+ *   input     — exports / defines onInput(ctx)
+ *   buildContext — exports / defines buildContext(ctx)
+ *   output    — exports / defines onOutput(ctx)
+ *   library   — shared variables and helpers, executed first,
+ *               its scope is available to the other three files
+ *
+ * All four are plain JS strings executed in a sandbox.
+ * Scripts are NOT tracked by the delta/undo system.
+ */
+export interface ScriptBundle {
+  library: string;
+  input: string;
+  buildContext: string;
+  output: string;
+}
 
 /**
  * The subset of global settings that a scenario or story
@@ -45,6 +63,7 @@ export type MessageRole = "user" | "assistant" | "system";
 export interface HistoryMessage {
   id: string;
   role: MessageRole;
+  parentId: string | null
   /** The final rendered text after all output hooks have run. */
   text: string;
   thinkingBlocks: ThinkingBlock[];
@@ -72,10 +91,8 @@ export interface Memory {
   id: string;
   /** Human-readable summary text. Editable by the user. */
   content: string;
-  /** ID of the first HistoryMessage this memory covers. */
-  fromMessageId: string;
-  /** ID of the last HistoryMessage this memory covers (inclusive). */
-  toMessageId: string;
+  /** IDs of the HistoryMessages this memory covers. */
+  messageIds: string[]
   createdAt: number;
   /** Set if the user manually edited the memory content. */
   editedAt?: number;
@@ -103,10 +120,10 @@ export interface StoryCard {
    */
   triggers: string[];
   /**
-   * Free-form tag for grouping cards in the UI.
+   * Free-form tags for grouping cards in the UI.
    * e.g. "character", "location", "lore", "rule"
    */
-  tag: string;
+  tags: string[];
   enabled: boolean;
   createdAt: number;
   updatedAt: number;
@@ -123,8 +140,11 @@ export interface Story {
   scenarioId?: string;
 
   name: string;
-  thumbnail?: string;
+  thumbnailId?: string;
 
+  /** The prompt at the very beginning of the story. */
+  openingPrompt: string;
+  
   /**
    * Story-specific description (separate from the scenario's).
    * Shown in the story editing modal.
@@ -137,7 +157,37 @@ export interface Story {
    */
   authorNotes: string;
 
+  /**
+   * Rules, guidelines, and topics to avoid. Injected into the
+   * system message after the system prompt. Author-controlled
+   * only — not exposed to hooks.
+   */
+  instructions: string;
+ 
+  /**
+   * Important world/story details (setting, characters, etc).
+   * Injected into the system message after instructions.
+   * Readable and mutable by hooks — mutations are delta-tracked.
+   */
+  essentials: string;
+ 
+  /**
+   * A JSON string (or any string) never sent to the AI.
+   * Used by scripts as persistent hook state across turns.
+   * Readable and mutable by hooks — mutations are delta-tracked.
+   * Not present on Scenario — this is per-playthrough only.
+   */
+  scriptState: string;
+
+  /**
+   * key value memory that persists. Does not get tracked by deltas,
+   * only use this for storing settings and configurations, otherwise
+   * use scriptState
+   */
+  kvMemory: Record<string, unknown>;
+
   messages: HistoryMessage[];
+  currentLeafId: string | null
   memories: Memory[];
   storyCards: StoryCard[];
 
@@ -151,13 +201,6 @@ export interface Story {
   scripts: Partial<ScriptBundle>;
 
   override: ConfigOverride;
-
-  /**
-   * Key-value store available to scripts via ctx.memory.
-   * Persisted with the story. Scripts can read and write
-   * arbitrary data here.
-   */
-  memory: Record<string, unknown>;
 
   createdAt: number;
   updatedAt: number;
@@ -173,10 +216,10 @@ export interface Story {
  * Never stored — always derived.
  */
 export interface ResolvedConfig {
+  providerId: string;
   endpoint: string;
   apiKey: string;
   model: string;
-  systemPrompt: string;
   authorNotes: string;
   params: ModelParams;
   prompts: PromptSettings;

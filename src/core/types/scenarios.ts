@@ -1,4 +1,4 @@
-import { ScriptBundle } from "./sessions";
+import { ScriptBundle } from "./stories";
 import { ConfigOverride, Story, StoryCard } from "./stories";
 
 /**
@@ -10,14 +10,26 @@ export interface Scenario {
   id: string;
   name: string;
   description: string;
-  thumbnail: string;
+  thumbnailId: string;
 
+  /** The prompt at the very beginning of the story. */
+  openingPrompt: string;
   /**
    * The author's notes are injected near the end of the context
    * (just before the most recent messages) to nudge the model's
    * tone, style, or focus without being part of the story text.
    */
   authorNotes: string;
+
+    /** Rules, guidelines, topics to avoid. Author-controlled only. */
+  instructions: string;
+ 
+  /**
+   * Important world details injected into the system message.
+   * Readable and mutable by hooks in stories derived from this
+   * scenario — mutations on Story.essentials are delta-tracked.
+   */
+  essentials: string;
 
   /** Tags for filtering in the library view. e.g. ["fantasy", "horror"] */
   tags: string[];
@@ -35,9 +47,6 @@ export interface Scenario {
 
   createdAt: number;
   updatedAt: number;
-
-  /** Optional cover image stored as a data URL or object URL. */
-  coverImage?: string;
 }
 
 /**
@@ -46,5 +55,4 @@ export interface Scenario {
  */
 export type LibraryItem =
   | { kind: "scenario"; data: Scenario }
-  | { kind: "story"; data: Story; scenario: Scenario }
-  | { kind: "story"; data: Story }
+  | { kind: "story"; data: Story; scenario?: Scenario }

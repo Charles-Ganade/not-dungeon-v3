@@ -1,33 +1,64 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 @plugin "daisyui" {
-  themes: forest --default;
+  themes: nord --default;
 }
 
-/* 1. Use a more intuitive box-sizing model */
+@plugin "daisyui/theme" {
+  name: "forest";
+  default: false;
+  prefersdark: true;
+  color-scheme: "dark";
+  --color-base-100: oklch(20.84% 0.008 17.911);
+  --color-base-200: oklch(18.522% 0.007 17.911);
+  --color-base-300: oklch(16.203% 0.007 17.911);
+  --color-base-content: oklch(83.768% 0.001 17.911);
+  --color-primary: oklch(68.628% 0.185 148.958);
+  --color-primary-content: oklch(0% 0 0);
+  --color-secondary: oklch(69.776% 0.135 168.327);
+  --color-secondary-content: oklch(13.955% 0.027 168.327);
+  --color-accent: oklch(70.628% 0.119 185.713);
+  --color-accent-content: oklch(14.125% 0.023 185.713);
+  --color-neutral: oklch(30.698% 0.039 171.364);
+  --color-neutral-content: oklch(86.139% 0.007 171.364);
+  --color-info: oklch(72.06% 0.191 231.6);
+  --color-info-content: oklch(0% 0 0);
+  --color-success: oklch(64.8% 0.15 160);
+  --color-success-content: oklch(0% 0 0);
+  --color-warning: oklch(84.71% 0.199 83.87);
+  --color-warning-content: oklch(0% 0 0);
+  --color-error: oklch(71.76% 0.221 22.18);
+  --color-error-content: oklch(0% 0 0);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
-/* 2. Remove default margin */
 * {
   margin: 0;
 }
 
-/* 3. Allow percentage-based heights */
 html,
 body {
   height: 100%;
 }
 
-/* 4. Improve text rendering */
 body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-/* 5. Improve media defaults */
 img,
 picture,
 video,
@@ -37,7 +68,6 @@ svg {
   max-width: 100%;
 }
 
-/* 6. Remove built-in form typography styles */
 input,
 button,
 textarea,
@@ -45,7 +75,6 @@ select {
   font: inherit;
 }
 
-/* 7. Avoid text overflows */
 p,
 h1,
 h2,
@@ -56,14 +85,79 @@ h6 {
   overflow-wrap: break-word;
 }
 
-/* 8. Remove list styles (optional) */
 ul[role="list"],
 ol[role="list"] {
   list-style: none;
 }
 
-/* 9. Set core root defaults */
 #root,
 #__next {
   isolation: isolate;
+}
+
+:root {
+  --ui-scale: 1;
+  --text-scale: 16;
+}
+
+html {
+  font-size: calc(1rem * var(--ui-scale));
+}
+
+body {
+  font-size: calc(1 * var(--text-scale) / 16 * 1rem);
+}
+
+@theme inline {
+  --text-xs: calc(0.75 * var(--text-scale) / 16 * 1rem);
+  --text-sm: calc(0.875 * var(--text-scale) / 16 * 1rem);
+  --text-base: calc(1 * var(--text-scale) / 16 * 1rem);
+  --text-lg: calc(1.125 * var(--text-scale) / 16 * 1rem);
+  --text-xl: calc(1.25 * var(--text-scale) / 16 * 1rem);
+  --text-2xl: calc(1.5 * var(--text-scale) / 16 * 1rem);
+  --text-3xl: calc(1.625 * var(--text-scale) / 16 * 1rem);
+  --text-4xl: calc(1.75 * var(--text-scale) / 16 * 1rem);
+}
+
+body,
+#root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body,
+#root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* codemirror */
+.cm-editor {
+  height: 100%;
+}
+
+.cm-scroller {
+  overflow: auto;
 }

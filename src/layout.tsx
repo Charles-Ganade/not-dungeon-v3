@@ -1,17 +1,50 @@
-import type { Component } from "solid-js";
-import { Route, Router } from "@solidjs/router";
-import Home from "./app/routes/home";
+import { createEffect, on, onMount, type Component, type JSX } from "solid-js";
 import Navbar from "./app/shared/Navbar";
+import { Toaster } from "solid-sonner";
+import { Portal } from "solid-js/web";
+import { settingsStore } from "./store";
+import { seedStarterScenarioIfNeeded } from "./services/db/scenarios";
 
-const Layout: Component = () => {
+const Layout: Component = (props: { children?: JSX.Element }) => {
+  onMount(async () => {
+    try {
+      await seedStarterScenarioIfNeeded();
+    } catch (err) {
+      console.error("Failed to initialize starter scenario:", err);
+    }
+  });
+  createEffect(
+    on(
+      () => ({
+        ui: settingsStore.settings.UI.uiScale,
+        font: settingsStore.settings.UI.fontSize,
+        theme: settingsStore.settings.UI.theme,
+      }),
+      ({ ui, font, theme }) => {
+        document.documentElement.style.setProperty("--ui-scale", ui.toString());
+        document.documentElement.style.setProperty(
+          "--text-scale",
+          font.toString(),
+        );
+
+        if (theme === "system") {
+          document.documentElement.removeAttribute("data-theme");
+        } else {
+          document.documentElement.setAttribute(
+            "data-theme",
+            theme === "light" ? "nord" : "forest",
+          );
+        }
+      },
+    ),
+  );
   return (
     <>
       <Navbar />
-      <main>
-        <Router>
-          <Route path={"/"} component={Home} />
-        </Router>
-      </main>
+      <main>{props.children}</main>
+      <Portal>
+        <Toaster toastOptions={{ style: { "z-index": "100" } }} />
+      </Portal>
     </>
   );
 };

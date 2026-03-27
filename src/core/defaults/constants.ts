@@ -1,0 +1,1 @@
+export const DEFAULT_THUMBNAIL_URL = "/default-thumbnail.webp";

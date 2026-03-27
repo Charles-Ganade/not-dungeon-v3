@@ -1,8 +1,8 @@
 import { splitProps } from "solid-js";
-import { cn } from "../../../utils";
 import { boxVariants } from "./Box.styles";
 import { BoxProps } from "./Box.types";
 import { Dynamic } from "solid-js/web";
+import { cn } from "@/utils";
 
 export default function Box(props: BoxProps) {
   const [local, others] = splitProps(props, [

@@ -1,4 +1,6 @@
-export type Theme = "system" | "light" | "dark";
+export const Themes = ["system", "light", "dark"] as const;
+
+export type Theme = typeof Themes[number];
  
 export interface UISettings {
   theme: Theme;
@@ -9,6 +11,7 @@ export interface UISettings {
 }
  
 export interface APISettings {
+  providerId: string;
   /** Base URL of any OpenAI-compatible endpoint. e.g. "https://api.openai.com/v1" */
   endpoint: string;
   apiKey: string;
@@ -66,6 +69,12 @@ export interface PromptSettings {
    * from selected text or a user description.
    */
   storyCardGeneratorPrompt: string;
+
+  /**
+   * Prompt sent to the model when summarizing a set of
+   * messages.
+   */
+  memoryGeneratorPrompt: string;
  
   /**
    * Prompt sent to the model when auto-generating a new
@@ -75,8 +84,8 @@ export interface PromptSettings {
 }
  
 export interface GlobalSettings {
-  ui: UISettings;
-  api: APISettings;
-  modelParams: ModelParams;
-  prompts: PromptSettings;
+  UI: UISettings;
+  API: APISettings;
+  Parameters: ModelParams;
+  Prompts: PromptSettings;
 }
