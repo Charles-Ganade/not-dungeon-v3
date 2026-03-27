@@ -1,4 +1,4 @@
-import { ScriptBundle } from "./sessions";
+import { ScriptBundle } from "./stories";
 import { ConfigOverride, Story, StoryCard } from "./stories";
 
 /**

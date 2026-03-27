@@ -1,5 +1,23 @@
 import type { ModelParams, PromptSettings } from "./settings";
-import type { ScriptBundle } from "./sessions";
+
+/**
+ * The four "files" shown in the scripts panel.
+ *
+ *   input     — exports / defines onInput(ctx)
+ *   buildContext — exports / defines buildContext(ctx)
+ *   output    — exports / defines onOutput(ctx)
+ *   library   — shared variables and helpers, executed first,
+ *               its scope is available to the other three files
+ *
+ * All four are plain JS strings executed in a sandbox.
+ * Scripts are NOT tracked by the delta/undo system.
+ */
+export interface ScriptBundle {
+  library: string;
+  input: string;
+  buildContext: string;
+  output: string;
+}
 
 /**
  * The subset of global settings that a scenario or story
@@ -45,6 +63,7 @@ export type MessageRole = "user" | "assistant" | "system";
 export interface HistoryMessage {
   id: string;
   role: MessageRole;
+  parentId: string | null
   /** The final rendered text after all output hooks have run. */
   text: string;
   thinkingBlocks: ThinkingBlock[];
@@ -72,10 +91,8 @@ export interface Memory {
   id: string;
   /** Human-readable summary text. Editable by the user. */
   content: string;
-  /** ID of the first HistoryMessage this memory covers. */
-  fromMessageId: string;
-  /** ID of the last HistoryMessage this memory covers (inclusive). */
-  toMessageId: string;
+  /** IDs of the HistoryMessages this memory covers. */
+  messageIds: string[]
   createdAt: number;
   /** Set if the user manually edited the memory content. */
   editedAt?: number;
@@ -138,6 +155,7 @@ export interface Story {
   authorNotes: string;
 
   messages: HistoryMessage[];
+  currentLeafId: string | null
   memories: Memory[];
   storyCards: StoryCard[];
 
