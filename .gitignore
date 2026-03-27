@@ -1,0 +1,76 @@
+# Node modules
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# =========================
+
+# Build output
+dist/
+build/
+.out/
+.vercel/
+.netlify/
+
+# =========================
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# =========================
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+Thumbs.db
+
+# =========================
+
+# Testing
+coverage/
+*.lcov
+
+# =========================
+
+# TypeScript
+*.tsbuildinfo
+
+# =========================
+
+# Cache / temp
+.cache/
+.temp/
+.tmp/
+.eslintcache
+
+# =========================
+
+# Vite specific
+vite.config.ts.timestamp-*
+vite.config.js.timestamp-*
+
+# =========================
+
+# Misc
+*.local
