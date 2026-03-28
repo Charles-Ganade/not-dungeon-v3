@@ -25,6 +25,14 @@ const anthropic: LLMProvider = {
   id: "anthropic",
   label: "Anthropic (Claude)",
 
+  async getModels(_endpoint: string, _apiKey: string): Promise<string[]> {
+  return [
+    "claude-opus-4-5",
+    "claude-sonnet-4-5",
+    "claude-haiku-4-5",
+  ];
+},
+
   async *stream(request, endpoint, apiKey, signal): AsyncIterable<LLMChunk> {
     const url = `${endpoint.replace(/\/$/, "")}/messages`;
     const { system, messages } = splitMessages(request.messages);

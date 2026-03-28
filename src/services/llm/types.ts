@@ -43,6 +43,10 @@ export interface LLMProvider {
     apiKey: string,
     signal: AbortSignal
   ): AsyncIterable<LLMChunk>;
+  getModels(
+    endpoint: string,
+    apiKey: string,
+  ): Promise<string[]>;
 }
 
 /**

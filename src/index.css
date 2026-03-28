@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @plugin "daisyui" {
-  themes: forest --default;
+  themes:
+    nord --default,
+    forest --prefersdark;
 }
 
 /* 1. Use a more intuitive box-sizing model */

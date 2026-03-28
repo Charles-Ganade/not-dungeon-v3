@@ -25,7 +25,7 @@ class AppDatabase extends Dexie {
       scenarios: "id, *tags, createdAt, updatedAt",
 
       // scenarioId is optional — "?" allows undefined in the index.
-      stories: "id, ?scenarioId, lastPlayedAt, createdAt",
+      stories: "id, scenarioId, lastPlayedAt, createdAt",
     });
   }
 }

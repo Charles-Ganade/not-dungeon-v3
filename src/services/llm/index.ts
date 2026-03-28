@@ -5,10 +5,30 @@ import "./providers/ollama";
 import { get, list } from "./registry";
 import type { LLMRequest, LLMChunk, LLMMessage, ScriptStream } from "./types";
 import { LLMErrorCode } from "./types";
+import { LLMError } from "./errors";
 
 export type { LLMRequest, LLMChunk, LLMMessage, ScriptStream };
 export { LLMErrorCode };
 export { list as listProviders };
+
+/**
+ * Fetches available models from the active provider.
+ * Throws an LLMError on network failure or unexpected response.
+ * The UI should wrap this in a try/catch and surface the error.
+ */
+export async function listModels(
+  providerId: string,
+  endpoint: string,
+  apiKey: string,
+): Promise<string[]> {
+  let provider;
+  try {
+    provider = get(providerId);
+  } catch (err) {
+    throw new LLMError(LLMErrorCode.UnknownProvider, (err as Error).message);
+  }
+  return provider.getModels(endpoint, apiKey);
+}
 
 /**
  * Streams a response from the active provider.

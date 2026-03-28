@@ -1,6 +1,5 @@
 import { createSignal } from "solid-js";
-import { sessionStore } from "@/store/session";
-import { configStore } from "@/store/config";
+import { sessionStore, configStore } from "@/store/";
 import { stream as llmStream, createScriptStream } from "@/services/llm";
 import { buildDefaultContext } from "./context_builder";
 import { mergeScriptBundle, runScript, createHookContexts } from "./script_runner";

@@ -1,17 +1,17 @@
 import { splitProps } from "solid-js";
-import { boxVariants } from "./Box.styles";
-import { BoxProps } from "./Box.types";
 import { Dynamic } from "solid-js/web";
 import { cn } from "@/utils";
+import { ToastProps } from "./Toast.types";
+import { toastVariants } from "./Toast.styles";
 
-export default function Box(props: BoxProps) {
+export function Toast(props: ToastProps) {
   const [local, others] = splitProps(props, [
     "as",
     "ref",
-    "display",
-    "position",
     "children",
     "class",
+    "vertical",
+    "horizontal",
   ]);
 
   return (
@@ -19,9 +19,9 @@ export default function Box(props: BoxProps) {
       component={local.as || "div"}
       ref={local.ref}
       class={cn(
-        boxVariants({
-          display: local.display,
-          position: local.position,
+        toastVariants({
+          vertical: local.vertical,
+          horizontal: local.horizontal,
           class: local.class,
         }),
       )}

@@ -1,11 +1,34 @@
 import { register } from "../registry";
-import { responseToError } from "../errors";
+import { LLMError, responseToError } from "../errors";
 import { LLMErrorCode } from "../types";
 import type { LLMProvider, LLMChunk } from "../types";
+import { isValidUrl } from "@/utils";
 
 const ollama: LLMProvider = {
   id: "ollama",
   label: "Ollama (local)",
+
+  async getModels(endpoint: string, _apiKey: string): Promise<string[]> {
+    const url = `${endpoint.replace(/\/$/, "")}/api/tags`;
+    if (!isValidUrl(url)) {
+      throw new LLMError(LLMErrorCode.ProviderUnavailable, "Invalid URL.")
+    }
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch (err) {
+      throw new LLMError(LLMErrorCode.NetworkError, (err as Error).message);
+    }
+    if (!res.ok) throw await responseToError(res);
+    const json = await res.json() as { models?: { name: string }[] };
+    if (!Array.isArray(json.models)) {
+      throw new LLMError(LLMErrorCode.ProviderError, "Unexpected response shape from /api/tags");
+    }
+    return json.models
+      .map((m) => m.name)
+      .filter(Boolean)
+      .sort();
+  },
 
   async *stream(request, endpoint, _apiKey, signal): AsyncIterable<LLMChunk> {
     const url = `${endpoint.replace(/\/$/, "")}/api/chat`;

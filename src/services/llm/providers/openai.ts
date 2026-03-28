@@ -1,11 +1,36 @@
 import { register } from "../registry";
-import { responseToError } from "../errors";
+import { LLMError, responseToError } from "../errors";
 import { LLMErrorCode } from "../types";
 import type { LLMProvider, LLMChunk } from "../types";
+import { isValidUrl } from "@/utils";
 
 const openai: LLMProvider = {
   id: "openai",
   label: "OpenAI / Compatible",
+
+  async getModels(endpoint: string, apiKey: string): Promise<string[]> {
+    const url = `${endpoint.replace(/\/$/, "")}/models`;
+    if (!isValidUrl(url)) {
+      throw new LLMError(LLMErrorCode.ProviderUnavailable, "Invalid URL.")
+    }
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+      });
+    } catch (err) {
+      throw new LLMError(LLMErrorCode.NetworkError, (err as Error).message);
+    }
+    if (!res.ok) throw await responseToError(res);
+    const json = await res.json() as { data?: { id: string }[] };
+    if (!Array.isArray(json.data)) {
+      throw new LLMError(LLMErrorCode.ProviderError, "Unexpected response shape from /models");
+    }
+    return json.data
+      .map((m) => m.id)
+      .filter(Boolean)
+      .sort();
+  },
 
   async *stream(request, endpoint, apiKey, signal): AsyncIterable<LLMChunk> {
     const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;

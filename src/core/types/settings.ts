@@ -82,8 +82,8 @@ export interface PromptSettings {
 }
  
 export interface GlobalSettings {
-  ui: UISettings;
-  api: APISettings;
-  modelParams: ModelParams;
-  prompts: PromptSettings;
+  UI: UISettings;
+  API: APISettings;
+  Parameters: ModelParams;
+  Prompts: PromptSettings;
 }

@@ -15,7 +15,7 @@ const resolvedConfig = createMemo<ResolvedConfig | null>(() => {
     : undefined;
 
   const prompts: PromptSettings = {
-    ...settings.prompts,
+    ...settings.Prompts,
     ...(scenario?.override.prompts ?? {}),
     ...(story.override.prompts ?? {}),
   };
@@ -25,11 +25,11 @@ const resolvedConfig = createMemo<ResolvedConfig | null>(() => {
     .join("\n\n");
 
   return {
-    providerId: settings.api.providerId,
-    endpoint: settings.api.endpoint,
-    apiKey: settings.api.apiKey,
-    model: settings.api.model,
-    params: settings.modelParams,
+    providerId: settings.API.providerId,
+    endpoint: settings.API.endpoint,
+    apiKey: settings.API.apiKey,
+    model: settings.API.model,
+    params: settings.Parameters,
     prompts,
     authorNotes,
   };

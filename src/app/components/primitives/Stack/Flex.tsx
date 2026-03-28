@@ -1,8 +1,8 @@
 import { splitProps } from "solid-js";
-import { cn } from "../../../utils";
 import { Dynamic } from "solid-js/web";
 import { FlexProps } from "./Flex.types";
 import { flexVariants } from "./Flex.styles";
+import { cn } from "@/utils";
 
 export default function Flex(props: FlexProps) {
   const [local, others] = splitProps(props, [
@@ -13,6 +13,7 @@ export default function Flex(props: FlexProps) {
     "align",
     "justify",
     "class",
+    "direction",
   ]);
 
   return (
@@ -24,6 +25,7 @@ export default function Flex(props: FlexProps) {
           gap: local.gap,
           align: local.align,
           justify: local.justify,
+          direction: local.direction,
           class: local.class,
         }),
       )}
