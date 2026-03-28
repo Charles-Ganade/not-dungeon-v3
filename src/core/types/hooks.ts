@@ -1,5 +1,4 @@
-import { ResolvedConfig } from "vite";
-import { HistoryMessage, Memory, StoryCard } from "./stories";
+import { HistoryMessage, Memory, ResolvedConfig, StoryCard } from "./stories";
 
 /**
  * Fields available to every hook function.

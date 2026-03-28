@@ -25,6 +25,7 @@ const resolvedConfig = createMemo<ResolvedConfig | null>(() => {
     .join("\n\n");
 
   return {
+    providerId: settings.api.providerId,
     endpoint: settings.api.endpoint,
     apiKey: settings.api.apiKey,
     model: settings.api.model,

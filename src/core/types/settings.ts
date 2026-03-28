@@ -9,6 +9,7 @@ export interface UISettings {
 }
  
 export interface APISettings {
+  providerId: string;
   /** Base URL of any OpenAI-compatible endpoint. e.g. "https://api.openai.com/v1" */
   endpoint: string;
   apiKey: string;

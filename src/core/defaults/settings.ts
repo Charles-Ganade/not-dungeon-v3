@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
     endpoint: "https://api.openai.com/v1",
     apiKey: "",
     model: "gpt-4o",
+    providerId: ""
   },
   modelParams: DEFAULT_MODEL_PARAMS,
   prompts: DEFAULT_PROMPT_SETTINGS,

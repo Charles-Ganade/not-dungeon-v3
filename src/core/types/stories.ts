@@ -191,6 +191,7 @@ export interface Story {
  * Never stored — always derived.
  */
 export interface ResolvedConfig {
+  providerId: string;
   endpoint: string;
   apiKey: string;
   model: string;
