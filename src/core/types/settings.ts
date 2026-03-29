@@ -1,4 +1,6 @@
-export type Theme = "system" | "light" | "dark";
+export const Themes = ["system", "light", "dark"] as const;
+
+export type Theme = typeof Themes[number];
  
 export interface UISettings {
   theme: Theme;
