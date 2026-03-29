@@ -41,6 +41,7 @@ export function Settings(props: SettingsProps) {
         <Flex
           direction={"col"}
           class="col-span-1 menu w-full p-4 gap-2 bg-base-300"
+          as={"ul"}
         >
           <For each={GLOBAL_SETTING_KEYS}>
             {(key) => (

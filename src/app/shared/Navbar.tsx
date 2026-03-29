@@ -10,7 +10,7 @@ export default function Navbar() {
 
   createEffect(() => {});
   return (
-    <Box position={"sticky"} as={"nav"}>
+    <Box position={"sticky"} as={"nav"} class="top-0 z-10 bg-base-100">
       <Flex class="border-b px-4 py-3">
         <Flex class="flex-1 gap-4">
           <A href="/">
