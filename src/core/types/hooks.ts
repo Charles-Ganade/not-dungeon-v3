@@ -14,6 +14,16 @@ interface BaseHookContext {
     readonly storyCards: readonly StoryCard[];
   };
 
+  /**
+   * Mutable essentials
+   */
+  essentials: string
+
+  /**
+   * Mutable script state
+   */
+  scriptState: string
+
   /** Persistent key-value store scoped to this adventure. */
   memory: {
     get<T = unknown>(key: string): T | undefined;

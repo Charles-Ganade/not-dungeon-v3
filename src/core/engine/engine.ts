@@ -91,15 +91,35 @@ async function generate(
     activeMemories,
     config,
     scriptStream,
+    essentials: story.essentials,   // ADD
+    scriptState: story.scriptState, // ADD
   });
 
   try {
     if (userMsg) {
+      const prevEssentials = story.essentials;
+      const prevScriptState = story.scriptState;
       await runScript(scriptBundle.library, scriptBundle.input, hookCtxs.input as unknown as Record<string, unknown>);
 
       if (hookCtxs.stopFlag.stopped) {
         sessionStore.rollback();
         return;
+      }
+
+      if (hookCtxs.input.essentials !== prevEssentials) {
+        sessionStore.enqueue({
+          type: "essentials:edit",
+          prev: prevEssentials,
+          next: hookCtxs.input.essentials,
+        });
+      }
+
+      if (hookCtxs.input.scriptState !== prevScriptState) {
+        sessionStore.enqueue({
+          type: "scriptState:edit",
+          prev: prevScriptState,
+          next: hookCtxs.input.scriptState,
+        });
       }
 
       // Enqueue the (possibly mutated) user message
@@ -117,13 +137,17 @@ async function generate(
       activePath: sessionStore.activePath, // re-read: user msg was just added
       activeMemories,
       storyCards: story.storyCards,
+      instructions: story.instructions,  // ADD
+      essentials: hookCtxs.input.essentials, // use post-onInput value
       config,
     });
 
     const buildCtx = hookCtxs.buildContext(
       defaultCtx.messages as ContextMessage[],
       defaultCtx.estimatedTokens,
-      defaultCtx.activeStoryCards
+      defaultCtx.activeStoryCards,
+      hookCtxs.input.essentials,   // pass post-onInput value
+      hookCtxs.input.scriptState,  // pass post-onInput value
     );
 
     await runScript(scriptBundle.library, scriptBundle.buildContext, buildCtx as unknown as Record<string, unknown>);
@@ -131,6 +155,22 @@ async function generate(
     if (hookCtxs.stopFlag.stopped) {
       sessionStore.rollback();
       return;
+    }
+
+    if (buildCtx.essentials !== hookCtxs.input.essentials) {
+      sessionStore.enqueue({
+        type: "essentials:edit",
+        prev: hookCtxs.input.essentials,
+        next: buildCtx.essentials,
+      });
+    }
+
+    if (buildCtx.scriptState !== hookCtxs.input.scriptState) {
+      sessionStore.enqueue({
+        type: "scriptState:edit",
+        prev: hookCtxs.input.scriptState,
+        next: buildCtx.scriptState,
+      });
     }
 
     let accText = "";
@@ -177,13 +217,34 @@ async function generate(
       });
     }
 
-    const outputCtx = hookCtxs.output(accText, accText);
+    const outputCtx = hookCtxs.output(
+      accText, 
+      accText, 
+      buildCtx.essentials, 
+      buildCtx.scriptState,
+    );
     await runScript(scriptBundle.library, scriptBundle.output, outputCtx as unknown as Record<string, unknown>);
 
     if (hookCtxs.stopFlag.stopped) {
       clearStreaming();
       sessionStore.rollback();
       return;
+    }
+
+    if (outputCtx.essentials !== buildCtx.essentials) {
+      sessionStore.enqueue({
+        type: "essentials:edit",
+        prev: buildCtx.essentials,
+        next: outputCtx.essentials,
+      });
+    }
+
+    if (outputCtx.scriptState !== buildCtx.scriptState) {
+      sessionStore.enqueue({
+        type: "scriptState:edit",
+        prev: buildCtx.scriptState,
+        next: outputCtx.scriptState,
+      });
     }
 
     const assistantMsgId = crypto.randomUUID();

@@ -48,6 +48,16 @@ export type Delta =
   | {
       type: "storyCard:remove";
       card: StoryCard;
+    }
+  | { 
+      type: "essentials:edit";
+      prev: string; 
+      next: string 
+    }
+  | { 
+      type: "scriptState:edit";
+      prev: string;
+      next: string
     };
 
 /**

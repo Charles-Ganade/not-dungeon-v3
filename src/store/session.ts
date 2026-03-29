@@ -126,6 +126,14 @@ function applyDelta(delta: Delta): void {
         case "storyCard:remove":
           story.storyCards = story.storyCards.filter((c) => c.id !== delta.card.id);
           break;
+        case "essentials:edit":
+          story.essentials = delta.next;
+          break;
+        case "scriptState:edit":
+          story.scriptState = delta.next;
+          break;
+        default:
+          delta satisfies never; // errors if a delta type is unhandled
       }
     }
   }));
@@ -142,6 +150,11 @@ function invertDelta(delta: Delta): Delta {
     case "storyCard:add":  return { type: "storyCard:remove", card: delta.card };
     case "storyCard:remove":return { type: "storyCard:add", card: delta.card };
     case "storyCard:edit": return { type: "storyCard:edit", cardId: delta.cardId, prev: delta.next, next: delta.prev };
+    case "essentials:edit": return { type: "essentials:edit", prev: delta.next, next: delta.prev};
+    case "scriptState:edit": return { type: "scriptState:edit", prev: delta.next, next: delta.prev };
+    default:
+      delta satisfies never; // errors if a delta type is unhandled
+      return delta;
   }
 }
 

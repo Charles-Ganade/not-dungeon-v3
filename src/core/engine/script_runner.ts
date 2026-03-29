@@ -107,8 +107,19 @@ function makeMemoryProxy(bag: Record<string, unknown>) {
 
 export interface HookContexts {
   input: InputHookContext;
-  buildContext: (messages: ContextMessage[], estimatedTokens: number, activeStoryCards: StoryCard[]) => BuildContextHookContext;
-  output: (output: string, rawOutput: string) => OutputHookContext;
+  buildContext: (
+    messages: ContextMessage[], 
+    estimatedTokens: number, 
+    activeStoryCards: StoryCard[],
+    essentials: string,
+    scriptState: string
+  ) => BuildContextHookContext;
+  output: (
+    output: string, 
+    rawOutput: string,
+    essentials: string,
+    scriptState: string
+  ) => OutputHookContext;
   stopFlag: StopFlag;
   logEntries: ScriptLogEntry[];
   pendingStoryCards: Omit<StoryCard, "id" | "createdAt" | "updatedAt">[];
@@ -121,6 +132,8 @@ export function createHookContexts(params: {
   activeMemories: Memory[];
   config: ResolvedConfig;
   scriptStream: ScriptStream;
+  essentials: string;     // story.essentials at turn start
+  scriptState: string;    // story.scriptState at turn start
 }): HookContexts {
   const { inputText, story, activePath, activeMemories, config, scriptStream } = params;
 
@@ -143,7 +156,9 @@ export function createHookContexts(params: {
     config: Object.freeze(config),
     log: logger.log,
     stop: (reason = "") => { stopFlag.stopped = true; stopFlag.reason = reason; },
-    ai: { stream: scriptStream },
+    ai: { stream: scriptStream },  
+    essentials: params.essentials,   // mutable — hooks assign ctx.essentials = "..."
+    scriptState: params.scriptState, // mutable — hooks assign ctx.scriptState = "..."
   };
 
   // Mutable input box — the script can reassign ctx.input
@@ -166,18 +181,29 @@ export function createHookContexts(params: {
   const buildContextFn = (
     messages: ContextMessage[],
     estimatedTokens: number,
-    activeStoryCards: StoryCard[]
+    activeStoryCards: StoryCard[], 
+    essentials: string, 
+    scriptState: string
   ): BuildContextHookContext => ({
     ...base,
     messages,
     estimatedTokens,
+    essentials,
+    scriptState,
     activeStoryCards: Object.freeze([...activeStoryCards]),
   });
 
-  const outputFn = (output: string, rawOutput: string): OutputHookContext => ({
+  const outputFn = (
+    output: string, 
+    rawOutput: string, 
+    essentials: string, 
+    scriptState: string
+  ): OutputHookContext => ({
     ...base,
     output,
     rawOutput,
+    essentials,
+    scriptState,
     addStoryCard: (card) => { pendingStoryCards.push(card); },
   });
 

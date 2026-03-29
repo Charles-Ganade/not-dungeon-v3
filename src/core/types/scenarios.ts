@@ -19,6 +19,16 @@ export interface Scenario {
    */
   authorNotes: string;
 
+    /** Rules, guidelines, topics to avoid. Author-controlled only. */
+  instructions: string;
+ 
+  /**
+   * Important world details injected into the system message.
+   * Readable and mutable by hooks in stories derived from this
+   * scenario — mutations on Story.essentials are delta-tracked.
+   */
+  essentials: string;
+
   /** Tags for filtering in the library view. e.g. ["fantasy", "horror"] */
   tags: string[];
 

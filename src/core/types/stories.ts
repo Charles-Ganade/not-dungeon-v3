@@ -154,6 +154,28 @@ export interface Story {
    */
   authorNotes: string;
 
+  /**
+   * Rules, guidelines, and topics to avoid. Injected into the
+   * system message after the system prompt. Author-controlled
+   * only — not exposed to hooks.
+   */
+  instructions: string;
+ 
+  /**
+   * Important world/story details (setting, characters, etc).
+   * Injected into the system message after instructions.
+   * Readable and mutable by hooks — mutations are delta-tracked.
+   */
+  essentials: string;
+ 
+  /**
+   * A JSON string (or any string) never sent to the AI.
+   * Used by scripts as persistent hook state across turns.
+   * Readable and mutable by hooks — mutations are delta-tracked.
+   * Not present on Scenario — this is per-playthrough only.
+   */
+  scriptState: string;
+
   messages: HistoryMessage[];
   currentLeafId: string | null
   memories: Memory[];

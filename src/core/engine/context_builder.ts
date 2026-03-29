@@ -8,6 +8,8 @@ export interface ContextBuilderInput {
   /** Memories whose messageIds are all within the active path. */
   activeMemories: Memory[];
   storyCards: StoryCard[];
+  instructions: string;   // ADD
+  essentials: string;     // ADD
   config: ResolvedConfig;
 }
 
@@ -101,12 +103,20 @@ function buildHistoryString(
 export function buildDefaultContext(
   input: ContextBuilderInput
 ): ContextBuilderOutput {
-  const { activePath, activeMemories, storyCards, config } = input;
+  const { activePath, activeMemories, storyCards, config, instructions, essentials } = input;
 
   const activeStoryCards = resolveActiveStoryCards(storyCards, activePath);
 
   // ── System message ──────────────────────────────────────────
   const systemParts: string[] = [config.prompts.defaultSystemPrompt];
+
+  if (instructions.trim()) {
+    systemParts.push(`Instructions:\n${instructions}`);
+  }
+ 
+  if (essentials.trim()) {
+    systemParts.push(`Essentials:\n${essentials}`);
+  }
 
   if (activeStoryCards.length > 0) {
     const cardBlock = activeStoryCards
