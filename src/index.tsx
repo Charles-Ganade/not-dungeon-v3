@@ -3,7 +3,7 @@ import "./index.css";
 import { render } from "solid-js/web";
 import "solid-devtools";
 
-import App from "./layout";
+import App from "./router";
 import { initStores } from "./store";
 
 const root = document.getElementById("root");

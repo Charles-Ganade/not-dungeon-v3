@@ -140,8 +140,11 @@ export interface Story {
   scenarioId?: string;
 
   name: string;
-  thumbnail?: string;
+  thumbnailId?: string;
 
+  /** The prompt at the very beginning of the story. */
+  openingPrompt: string;
+  
   /**
    * Story-specific description (separate from the scenario's).
    * Shown in the story editing modal.
@@ -191,13 +194,6 @@ export interface Story {
   scripts: Partial<ScriptBundle>;
 
   override: ConfigOverride;
-
-  /**
-   * Key-value store available to scripts via ctx.memory.
-   * Persisted with the story. Scripts can read and write
-   * arbitrary data here.
-   */
-  memory: Record<string, unknown>;
 
   createdAt: number;
   updatedAt: number;

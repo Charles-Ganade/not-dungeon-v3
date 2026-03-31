@@ -105,7 +105,7 @@ ol[role="list"] {
 
 :root {
   --ui-scale: 1;
-  --text-scale: 1;
+  --text-scale: 16;
 }
 
 html {
@@ -113,7 +113,35 @@ html {
 }
 
 body {
-  font-size: calc(1rem * var(--text-scale) / 16);
+  font-size: calc(1 * var(--text-scale) / 16 * 1rem);
+}
+
+@theme inline {
+  --text-xs: calc(0.75 * var(--text-scale) / 16 * 1rem);
+  --text-sm: calc(0.875 * var(--text-scale) / 16 * 1rem);
+  --text-base: calc(1 * var(--text-scale) / 16 * 1rem);
+  --text-lg: calc(1.125 * var(--text-scale) / 16 * 1rem);
+  --text-xl: calc(1.25 * var(--text-scale) / 16 * 1rem);
+  --text-2xl: calc(1.5 * var(--text-scale) / 16 * 1rem);
+  --text-3xl: calc(1.625 * var(--text-scale) / 16 * 1rem);
+  --text-4xl: calc(1.75 * var(--text-scale) / 16 * 1rem);
+}
+
+body,
+#root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 body,

@@ -13,12 +13,10 @@ export default function Navbar() {
     <Box position={"sticky"} as={"nav"} class="top-0 z-10 bg-base-100">
       <Flex class="border-b px-4 py-3">
         <Flex class="flex-1 gap-4">
-          <A href="/">
-            <button class="btn btn-ghost btn-xs">
-              <Text variant={"h5"}>
-                <FaRegularHome />
-              </Text>
-            </button>
+          <A href="/" class="btn btn-ghost btn-xs">
+            <Text variant={"h5"}>
+              <FaRegularHome />
+            </Text>
           </A>
           <button
             class="btn btn-ghost btn-xs"

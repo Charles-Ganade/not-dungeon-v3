@@ -1,6 +1,4 @@
 import { createEffect, on, type Component, type JSX } from "solid-js";
-import { Route, Router } from "@solidjs/router";
-import Home from "./app/routes/home";
 import Navbar from "./app/shared/Navbar";
 import { Toaster } from "solid-sonner";
 import { Portal } from "solid-js/web";
@@ -43,12 +41,4 @@ const Layout: Component = (props: { children?: JSX.Element }) => {
   );
 };
 
-const App: Component = () => {
-  return (
-    <Router root={Layout}>
-      <Route path={"/"} component={Home} />
-    </Router>
-  );
-};
-
-export default App;
+export default Layout;

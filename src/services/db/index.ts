@@ -20,3 +20,5 @@ export {
   touchStory,
   deleteStory,
 } from "./stories";
+
+export * from "./thumbnails"

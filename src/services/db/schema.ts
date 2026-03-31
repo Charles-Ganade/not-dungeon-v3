@@ -8,24 +8,25 @@ interface SettingsRow {
   data: GlobalSettings;
 }
 
+interface ThumbnailRow {
+  id: string;
+  blob: Blob;
+}
+
 class AppDatabase extends Dexie {
   settings!: Table<SettingsRow, "global">;
   scenarios!: Table<Scenario, string>;
   stories!: Table<Story, string>;
+  thumbnails!: Table<ThumbnailRow, string>;
 
   constructor() {
     super("not-dungeon");
 
     this.version(1).stores({
-      // Single-row table, always queried with id === "global".
       settings: "id",
-
-      // *tags — multi-entry index: each tag gets its own entry,
-      // enabling: db.scenarios.where("tags").equals("fantasy")
       scenarios: "id, *tags, createdAt, updatedAt",
-
-      // scenarioId is optional — "?" allows undefined in the index.
       stories: "id, scenarioId, lastPlayedAt, createdAt",
+      thumbnails: "id",
     });
   }
 }

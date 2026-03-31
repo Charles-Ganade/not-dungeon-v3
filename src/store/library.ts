@@ -7,6 +7,7 @@ import {
 import type { Scenario } from "@/core/types/scenarios";
 import type { Story } from "@/core/types/stories";
 import type { LibraryItem } from "@/core/types/scenarios";
+import { updateStory } from "@/services/db/stories";
 
 interface LibraryState {
   scenarios: Scenario[];
@@ -46,23 +47,42 @@ const items = createMemo<LibraryItem[]>(() => {
   });
 });
 
+/**
+ * Group the scenarios and stories in memory. All stories with
+ * no scenarios are grouped under `undefined`
+ */
+const grouped = createMemo(() => {
+  const scenarioMap = new Map(state.scenarios.map((s) => [s.id, s]));
+  const groups = new Map<string | undefined, Story[]>();
+
+  for (const story of state.stories) {
+    const key = story.scenarioId; // undefined = quick starts
+    const bucket = groups.get(key) ?? [];
+    bucket.push(story);
+    groups.set(key, bucket);
+  }
+
+  return groups; // Map<scenarioId | undefined, Story[]>
+});
+
 async function init(): Promise<void> {
   setState("loading", true);
   const [scenarios, stories] = await Promise.all([getAllScenarios(), getAllStories()]);
   setState(reconcile({ scenarios, stories, loading: false }));
 }
 
-async function addScenario(scenario: Scenario): Promise<Scenario> {
-  await createScenario(scenario);
-  setState("scenarios", (prev) => [scenario, ...prev]);
+async function addScenario(scenario: Scenario, thumbnail?: Blob): Promise<Scenario> {
+  const saved = await createScenario(scenario, thumbnail);
+  setState("scenarios", (prev) => [saved, ...prev]);
   return scenario;
 }
 
 async function editScenario(
   id: string,
-  patch: Partial<Omit<Scenario, "id" | "createdAt">>
+  patch: Partial<Omit<Scenario, "id" | "createdAt">>,
+  thumbnail?: Blob
 ): Promise<void> {
-  const updated = await updateScenario(id, patch);
+  const updated = await updateScenario(id, patch, thumbnail);
   setState("scenarios", (prev) =>
     prev.map((s) => (s.id === id ? updated : s))
   );
@@ -73,10 +93,10 @@ async function removeScenario(id: string): Promise<void> {
   setState("scenarios", (prev) => prev.filter((s) => s.id !== id));
 }
 
-async function addStory(story: Story): Promise<Story> {
-  await createStory(story);
-  setState("stories", (prev) => [story, ...prev]);
-  return story;
+async function addStory(story: Story, thumbnail?: Blob): Promise<Story> {
+  const saved = await createStory(story, thumbnail); // has thumbnailId set
+  setState("stories", (prev) => [saved, ...prev]);   // use saved, not story
+  return saved;
 }
 
 /**
@@ -88,6 +108,19 @@ function syncStory(story: Story): void {
   setState("stories", (prev) =>
     prev.map((s) => (s.id === story.id ? story : s))
   );
+}
+
+type EditableStoryFields = Pick<Story,
+  "name" | "description" | "authorNotes" | "essentials" | "instructions" | "thumbnailId"
+>;
+ 
+async function editStory(
+  id: string,
+  patch: Partial<EditableStoryFields>,
+  thumbnail?: Blob
+): Promise<void> {
+  const updated = await updateStory(id, patch, thumbnail);
+  setState("stories", (prev) => prev.map((s) => (s.id === id ? updated : s)));
 }
 
 async function removeStory(id: string): Promise<void> {
@@ -105,5 +138,6 @@ export const libraryStore = {
   // Actions
   init,
   addScenario, editScenario, removeScenario,
-  addStory, syncStory, removeStory,
+  addStory, syncStory, editStory, removeStory,
+  grouped
 };

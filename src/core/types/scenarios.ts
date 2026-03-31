@@ -10,8 +10,10 @@ export interface Scenario {
   id: string;
   name: string;
   description: string;
-  thumbnail: string;
+  thumbnailId: string;
 
+  /** The prompt at the very beginning of the story. */
+  openingPrompt: string;
   /**
    * The author's notes are injected near the end of the context
    * (just before the most recent messages) to nudge the model's

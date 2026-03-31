@@ -1,5 +1,6 @@
 import { db } from "./schema";
 import type { Scenario } from "@/core/types/scenarios";
+import { deleteThumbnail, saveThumbnail } from "./thumbnails";
 
 // ── Read ──────────────────────────────────────────────────────
 
@@ -26,16 +27,43 @@ export async function getScenariosByTags(tags: string[]): Promise<Scenario[]> {
 
 // ── Write ─────────────────────────────────────────────────────
 
-export async function createScenario(scenario: Scenario): Promise<Scenario> {
-  await db.scenarios.add(scenario);
-  return scenario;
+export async function createScenario(
+  scenario: Scenario,
+  thumbnail?: Blob
+): Promise<Scenario> {
+  const row: Scenario = { ...scenario };
+ 
+  if (thumbnail) {
+    row.thumbnailId = await saveThumbnail(thumbnail);
+  }
+ 
+  await db.scenarios.add(row);
+  return row;
 }
 
 export async function updateScenario(
   id: string,
-  patch: Partial<Omit<Scenario, "id" | "createdAt">>
+  patch: Partial<Omit<Scenario, "id" | "createdAt">>,
+  thumbnail?: Blob
 ): Promise<Scenario> {
-  await db.scenarios.update(id, { ...patch, updatedAt: Date.now() });
+  const existing = await getScenario(id);
+  if (!existing) throw new Error(`Scenario ${id} not found`);
+ 
+  const updates: Partial<Scenario> = { ...patch, updatedAt: Date.now() };
+ 
+  if (thumbnail) {
+    await Promise.all([
+      saveThumbnail(thumbnail), 
+      existing.thumbnailId 
+        ? deleteThumbnail(existing.thumbnailId) 
+        : null
+    ])
+  } else if ("thumbnailId" in patch && (patch.thumbnailId === undefined || patch.thumbnailId === "")) {
+    if (existing.thumbnailId) await deleteThumbnail(existing.thumbnailId);
+    updates.thumbnailId = undefined;
+  }
+ 
+  await db.scenarios.update(id, updates);
   const updated = await db.scenarios.get(id);
   if (!updated) throw new Error(`Scenario ${id} not found after update`);
   return updated;
@@ -48,5 +76,7 @@ export async function updateScenario(
  * scenario field on LibraryItem.
  */
 export async function deleteScenario(id: string): Promise<void> {
+  const scenario = await getScenario(id);
+  if (scenario?.thumbnailId) deleteThumbnail(scenario.thumbnailId)
   await db.scenarios.delete(id);
 }
