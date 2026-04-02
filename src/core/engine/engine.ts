@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import { sessionStore, configStore } from "@/store/";
-import { stream as llmStream, createScriptStream } from "@/services/llm";
+import { stream as llmStream, createScriptStream, LLMChunk } from "@/services/llm";
 import { buildDefaultContext } from "./context_builder";
-import { mergeScriptBundle, runScript, createHookContexts } from "./script_runner";
+import { mergeScriptBundle, runScript, createHookContexts, ScriptLogEntry } from "./script_runner";
 import type { HistoryMessage, ThinkingBlock } from "@/core/types/stories";
 import type { ContextMessage } from "@/core/types/hooks";
 
@@ -42,7 +42,9 @@ function clearStreaming(): void {
  */
 async function generate(
   parentId: string | null,
-  userMsg: HistoryMessage | null
+  userMsg: HistoryMessage | null,
+  onLog?: (entry: ScriptLogEntry) => void,
+  onChunk?: (chunk: LLMChunk) => void
 ): Promise<void> {
   const story = sessionStore.story;
   const config = configStore.config;
@@ -93,6 +95,7 @@ async function generate(
     scriptStream,
     essentials: story.essentials,   // ADD
     scriptState: story.scriptState, // ADD
+    onLog
   });
 
   try {
@@ -192,6 +195,7 @@ async function generate(
       config.apiKey,
       signal
     )) {
+      onChunk?.(chunk)
       if (chunk.type === "text") {
         accText += chunk.delta;
         setStreamingText(accText);
@@ -295,7 +299,7 @@ async function generate(
 /**
  * Runs a full turn: adds a user message then generates a response.
  */
-export async function run(input: string): Promise<void> {
+export async function run(input: string, onLog?: (entry: ScriptLogEntry) => void, onChunk?: (chunk: LLMChunk) => void): Promise<void> {
   const story = sessionStore.story;
   if (!story) return;
 
@@ -304,8 +308,7 @@ export async function run(input: string): Promise<void> {
     text: input,
     parentId: story.currentLeafId,
   });
-
-  await generate(story.currentLeafId, userMsg);
+  await generate(story.currentLeafId, userMsg, onLog, onChunk);
 }
 
 /**
@@ -315,12 +318,12 @@ export async function run(input: string): Promise<void> {
  * The current leaf stays in the tree; the new response becomes
  * the active branch (currentLeafId updates via message:add delta).
  */
-export async function retry(): Promise<void> {
+export async function retry(onLog?: (entry: ScriptLogEntry) => void, onChunk?: (entry: LLMChunk) => void): Promise<void> {
   const story = sessionStore.story;
   if (!story || !story.currentLeafId) return;
 
   const currentLeaf = story.messages.find((m) => m.id === story.currentLeafId);
   if (!currentLeaf) return;
 
-  await generate(currentLeaf.parentId, null);
+  await generate(currentLeaf.parentId, null, onLog, onChunk);
 }

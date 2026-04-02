@@ -1,6 +1,6 @@
 import { db } from "./schema";
 import type { Scenario } from "@/core/types/scenarios";
-import { deleteThumbnail, saveThumbnail } from "./thumbnails";
+import { deleteThumbnail, isThumbnailReferenced, saveThumbnail } from "./thumbnails";
 
 // ── Read ──────────────────────────────────────────────────────
 
@@ -52,12 +52,9 @@ export async function updateScenario(
   const updates: Partial<Scenario> = { ...patch, updatedAt: Date.now() };
  
   if (thumbnail) {
-    await Promise.all([
-      saveThumbnail(thumbnail), 
-      existing.thumbnailId 
-        ? deleteThumbnail(existing.thumbnailId) 
-        : null
-    ])
+    const thumbnailId = await saveThumbnail(thumbnail);
+    if (existing.thumbnailId) await deleteThumbnail(existing.thumbnailId);
+    updates.thumbnailId = thumbnailId;
   } else if ("thumbnailId" in patch && (patch.thumbnailId === undefined || patch.thumbnailId === "")) {
     if (existing.thumbnailId) await deleteThumbnail(existing.thumbnailId);
     updates.thumbnailId = undefined;
@@ -77,6 +74,8 @@ export async function updateScenario(
  */
 export async function deleteScenario(id: string): Promise<void> {
   const scenario = await getScenario(id);
-  if (scenario?.thumbnailId) deleteThumbnail(scenario.thumbnailId)
+  if (scenario?.thumbnailId && !(await isThumbnailReferenced(scenario.thumbnailId))) {
+    await deleteThumbnail(scenario.thumbnailId);
+  }
   await db.scenarios.delete(id);
 }

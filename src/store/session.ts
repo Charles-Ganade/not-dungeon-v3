@@ -1,4 +1,4 @@
-import { createStore, produce, reconcile } from "solid-js/store";
+import { createStore, produce, reconcile, unwrap } from "solid-js/store";
 import { createMemo } from "solid-js";
 import { saveStory, touchStory } from "@/services/db";
 import { libraryStore } from "./library";
@@ -57,7 +57,7 @@ function scheduleSave(): void {
   _saveTimer = setTimeout(async () => {
     _saveTimer = null;
     if (!state.story) return;
-    await saveStory(state.story);
+    await saveStory(unwrap(state.story));
     libraryStore.syncStory(state.story);
   }, SAVE_DEBOUNCE_MS);
 }
@@ -75,6 +75,20 @@ async function open(story: Story): Promise<void> {
   };
 
   setState(reconcile({ story, session }));
+
+  if (story.openingPrompt.trim() && story.messages.length === 0) {
+    const openingMessage: HistoryMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      text: story.openingPrompt,
+      parentId: null,
+      thinkingBlocks: [],
+      createdAt: Date.now(),
+    };
+    sessionStore.beginTransaction("Opening prompt");
+    sessionStore.enqueue({ type: "message:add", message: openingMessage });
+    sessionStore.commit();
+  }
 }
 
 function close(): void {

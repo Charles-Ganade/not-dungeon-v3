@@ -16,7 +16,6 @@ import { PanelLabel } from "./PanelLabel";
 import { Flex, Text } from "@/app/components";
 import { listModels } from "@/services/llm";
 import { toast } from "solid-sonner";
-import { debounce } from "@/utils";
 import { debouncedPatch } from "./Settings";
 
 const fetchModels = ([providerId, endpoint, apiKey]: Parameters<

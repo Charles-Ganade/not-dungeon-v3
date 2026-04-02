@@ -120,7 +120,7 @@ export function buildDefaultContext(
 
   if (activeStoryCards.length > 0) {
     const cardBlock = activeStoryCards
-      .map((c) => `[${c.title}]\n${c.content}`)
+      .map((c) => `[${c.title}]\n[${c.tags.join(",")}]\n${c.content}`)
       .join("\n\n");
     systemParts.push(`World information:\n${cardBlock}`);
   }

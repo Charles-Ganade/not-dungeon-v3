@@ -15,6 +15,7 @@ import { BsPencil } from "solid-icons/bs";
 import { getThumbnailUrl } from "@/services/db";
 import { DeleteStoryModal } from "./modals/DeleteStoryModal";
 import { EditStoryModal } from "./modals/EditStoryModal";
+import { A } from "@solidjs/router";
 
 interface StoryCardProps {
   story: Story;
@@ -67,16 +68,16 @@ export function StoryCard(props: StoryCardProps) {
             />
           </Show>
           <div class="absolute inset-0 bg-base-300/80 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-            <button
+            <A
               class="btn btn-primary"
               onClick={(e) => {
                 e.stopPropagation();
-                props.onPlay();
               }}
               title="Continue"
+              href={`/play/${props.story.id}`}
             >
               <FiPlay />
-            </button>
+            </A>
             <button
               class="btn btn-secondary btn-outline"
               onClick={(e) => {

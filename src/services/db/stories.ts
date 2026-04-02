@@ -2,7 +2,7 @@
 
 import { db } from "./schema";
 import type { Story } from "@/core/types/stories";
-import { deleteThumbnail, saveThumbnail } from "./thumbnails";
+import { deleteThumbnail, isThumbnailReferenced, saveThumbnail } from "./thumbnails";
 
 // ── Read ──────────────────────────────────────────────────────
 
@@ -105,6 +105,8 @@ export async function updateStory(
  */
 export async function deleteStory(id: string): Promise<void> {
   const story = await getStory(id);
-  if (story && story.thumbnailId) deleteThumbnail(story.thumbnailId)
+  if (story?.thumbnailId && !(await isThumbnailReferenced(story.thumbnailId))) {
+    await deleteThumbnail(story.thumbnailId);
+  }
   await db.stories.delete(id);
 }
