@@ -4,7 +4,14 @@ import { Story } from "@/core/types";
 import { getThumbnailBlob } from "@/services/db";
 import { libraryStore } from "@/store";
 import { FiSave, FiX } from "solid-icons/fi";
-import { createEffect, createSignal, on, onCleanup, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  Show,
+} from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 
 interface EditStoryModalProps {
@@ -15,14 +22,16 @@ interface EditStoryModalProps {
 
 export function EditStoryModal(props: EditStoryModalProps) {
   const originalStory = makeDefaultStory(props.story);
-  const [story, setStory] = createStore(makeDefaultStory(originalStory));
+  const [story, setStory] = createStore(structuredClone(unwrap(originalStory)));
   const [confirmModalOpen, setConfirmModalOpen] = createSignal(false);
   const [thumbBlob, setThumbBlob] = createSignal<Blob | null>(null);
   const [thumbBlobOriginal, setThumbBlobOriginal] = createSignal<Blob | null>(
     null,
   );
 
-  const thumbUrl = () => (thumbBlob() ? URL.createObjectURL(thumbBlob()!) : "");
+  const thumbUrl = createMemo(() =>
+    thumbBlob() ? URL.createObjectURL(thumbBlob()!) : "",
+  );
 
   const handleFile = (e: Event) => {
     const input = e.currentTarget as HTMLInputElement;
@@ -68,9 +77,15 @@ export function EditStoryModal(props: EditStoryModalProps) {
     close();
   };
 
-  const isChanged = () =>
-    JSON.stringify(unwrap(story)) !== JSON.stringify(originalStory) ||
-    thumbBlob() !== thumbBlobOriginal();
+  const isChanged = createMemo(() => {
+    return (
+      story.name !== originalStory.name ||
+      story.description !== originalStory.description ||
+      story.essentials !== originalStory.essentials ||
+      story.authorNotes !== originalStory.authorNotes ||
+      thumbBlob() !== thumbBlobOriginal()
+    );
+  });
 
   return (
     <Modal
@@ -116,6 +131,16 @@ export function EditStoryModal(props: EditStoryModalProps) {
           <Text variant={"h3"} weight={"bold"}>
             Quick Start a Story
           </Text>
+          <button
+            class="btn btn-secondary"
+            onClick={saveAndClose}
+            disabled={!isChanged()}
+          >
+            <Text>
+              <FiSave />
+            </Text>
+            <Text>Save Edits</Text>
+          </button>
         </Flex>
         <Flex direction={"col"} class="min-h-0 overflow-y-auto flex-1 h-fit">
           <div class="flex flex-col gap-1">
@@ -170,14 +195,6 @@ export function EditStoryModal(props: EditStoryModalProps) {
               />
             </div>
           </Flex>
-          <div class="flex justify-end pt-2 join">
-            <button class="btn btn-secondary" onClick={saveAndClose}>
-              <Text class="text-inherit">
-                <FiSave />
-              </Text>
-              <Text class="text-inherit">Save Edits</Text>
-            </button>
-          </div>
         </Flex>
       </Flex>
       <Modal

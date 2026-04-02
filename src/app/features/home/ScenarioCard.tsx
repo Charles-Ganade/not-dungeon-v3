@@ -2,22 +2,23 @@
 
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { cn } from "@/utils";
-import { Text } from "@/app/components";
-import { FiPlus, FiTrash2 } from "solid-icons/fi";
+import { Modal, Text } from "@/app/components";
+import { FiPlay, FiPlus, FiTrash2 } from "solid-icons/fi";
 import type { Scenario } from "@/core/types/scenarios";
 import { BsPencil } from "solid-icons/bs";
 import { getThumbnailUrl } from "@/services/db";
+import { A } from "@solidjs/router";
 
 interface ScenarioCardProps {
   scenario: Scenario;
   onNewStory: () => void;
-  onEdit: () => void;
   onDelete: () => void;
   class?: string;
 }
 
 export function ScenarioCard(props: ScenarioCardProps) {
   const [thumbUrl, setThumbUrl] = createSignal<string | null>(null);
+  const [openDelete, setOpenDelete] = createSignal(false);
 
   onMount(async () => {
     if (props.scenario.thumbnailId) {
@@ -29,6 +30,7 @@ export function ScenarioCard(props: ScenarioCardProps) {
     const url = thumbUrl();
     if (url) URL.revokeObjectURL(url);
   });
+
   return (
     <div
       class={cn(
@@ -53,23 +55,23 @@ export function ScenarioCard(props: ScenarioCardProps) {
             }}
             title="New story"
           >
-            <FiPlus />
+            <FiPlay />
           </button>
-          <button
+          <A
             class="btn btn-secondary btn-outline"
+            href={`/edit-scenario/${props.scenario.id}`}
             onClick={(e) => {
               e.stopPropagation();
-              props.onEdit();
             }}
             title="Edit"
           >
             <BsPencil />
-          </button>
+          </A>
           <button
             class="btn btn-error btn-outline"
             onClick={(e) => {
               e.stopPropagation();
-              props.onDelete();
+              setOpenDelete(true);
             }}
             title="Delete"
           >
@@ -110,6 +112,27 @@ export function ScenarioCard(props: ScenarioCardProps) {
           </Show>
         </div>
       </div>
+      <Modal
+        open={openDelete()}
+        onClose={() => setOpenDelete(false)}
+        class="p-0! flex flex-col bg-base-200 shadow"
+        onClick={(e) => e.stopPropagation()}
+        size={"sm"}
+      >
+        <div class="flex flex-col gap-4 p-6">
+          <Text variant={"h4"} weight={"bold"}>
+            Delete scenario "{props.scenario.name}"?
+          </Text>
+          <div class="flex w-full gap-2">
+            <button class="btn flex-1" onClick={() => setOpenDelete(false)}>
+              <Text class="text-inherit">Cancel</Text>
+            </button>
+            <button class="btn btn-error flex-1" onClick={props.onDelete}>
+              <Text class="text-inherit">Delete</Text>
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

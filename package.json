@@ -12,6 +12,7 @@
   "license": "MIT",
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.13",
+    "@types/lodash": "^4.17.24",
     "solid-devtools": "^0.34.3",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.9.3",
@@ -36,6 +37,7 @@
     "daisyui": "^5.5.19",
     "dexie": "^4.4.1",
     "eslint": "^10.1.0",
+    "lodash": "^4.17.23",
     "solid-icons": "^1.2.0",
     "solid-js": "^1.9.9",
     "solid-sonner": "^0.3.1",

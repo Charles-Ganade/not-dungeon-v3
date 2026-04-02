@@ -1,8 +1,9 @@
 import { Flex, Modal, Text } from "@/app/components";
 import { makeDefaultStory } from "@/core/defaults";
 import { libraryStore } from "@/store";
+import { useNavigate } from "@solidjs/router";
 import { FiPlay, FiSave, FiX } from "solid-icons/fi";
-import { Accessor, createSignal, Show } from "solid-js";
+import { Accessor, createMemo, createSignal, Show } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 
 interface CreateStoryModalProps {
@@ -16,6 +17,7 @@ export function CreateStoryModal(props: CreateStoryModalProps) {
   const [confirmModalOpen, setConfirmModalOpen] = createSignal(false);
   const [thumbBlob, setThumbBlob] = createSignal<Blob | null>(null);
   const [showAdvancedOptions, setShowAdvancedOptions] = createSignal(false);
+  const navigator = useNavigate();
 
   const thumbUrl = () =>
     thumbBlob() ? URL.createObjectURL(thumbBlob()!) : null;
@@ -39,16 +41,23 @@ export function CreateStoryModal(props: CreateStoryModalProps) {
   };
 
   const saveAndClose = async () => {
-    await libraryStore.addStory(
+    const newStory = await libraryStore.addStory(
       structuredClone(unwrap(story)),
       thumbBlob() ?? undefined,
     );
     close();
+    navigator(`/play/${newStory.id}`);
   };
 
-  const isChanged = () =>
-    JSON.stringify(unwrap(story)) !== JSON.stringify(emptyStory) ||
-    thumbUrl() !== null;
+  const isChanged = createMemo(() => {
+    return (
+      story.name !== emptyStory.name ||
+      story.description !== emptyStory.description ||
+      story.essentials !== emptyStory.essentials ||
+      story.authorNotes !== emptyStory.authorNotes ||
+      thumbBlob() !== null
+    );
+  });
 
   return (
     <Modal
@@ -94,6 +103,16 @@ export function CreateStoryModal(props: CreateStoryModalProps) {
           <Text variant={"h3"} weight={"bold"}>
             Quick Start a Story
           </Text>
+          <button
+            class="btn btn-secondary btn-outline"
+            onClick={saveAndClose}
+            disabled={!isChanged() && story.openingPrompt.trim() === ""}
+          >
+            <Text>
+              <FiPlay />
+            </Text>
+            <Text>Play</Text>
+          </button>
         </Flex>
         <Flex direction={"col"} class="min-h-0 overflow-y-auto flex-1 h-fit">
           <div class="flex flex-col gap-1">
@@ -181,15 +200,6 @@ export function CreateStoryModal(props: CreateStoryModalProps) {
                 <FiPlay />
               </Text>
               <Text class="text-inherit">Save and Play</Text>
-            </button>
-            <button
-              class="btn btn-secondary btn-outline"
-              onClick={saveAndClose}
-            >
-              <Text class="text-inherit">
-                <FiSave />
-              </Text>
-              <Text class="text-inherit">Save</Text>
             </button>
           </div>
         </Flex>

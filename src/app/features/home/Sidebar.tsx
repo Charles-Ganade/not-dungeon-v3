@@ -28,10 +28,9 @@ function SidebarItem(props: SidebarItemProps) {
         <Text variant="h3" class="text-inherit shrink-0">
           {props.icon}
         </Text>
-        {/* grid-template-columns: 0fr collapses to truly zero width */}
         <div
           class={cn(
-            "grid w-full transition-[grid-template-columns] duration-300 ease-in-out",
+            "grid w-full transition-[grid-template-columns] duration-300 ease-linear",
             isSidebarOpen() ? "grid-cols-[1fr]" : "grid-cols-[0fr]",
           )}
         >
@@ -60,14 +59,14 @@ function HopBackCard() {
         // outer: collapses height
         <div
           class={cn(
-            "hidden md:grid transition-[grid-template-rows] duration-300 ease-in-out",
+            "hidden md:grid transition-[grid-template-rows] duration-300 ease-linear",
             isSidebarOpen() ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
           )}
         >
           {/* inner: collapses width */}
           <div
             class={cn(
-              "grid overflow-hidden transition-[grid-template-columns] duration-300 ease-in-out px-2",
+              "grid overflow-hidden transition-[grid-template-columns] duration-300 ease-linear px-2",
               isSidebarOpen() ? "grid-cols-[1fr]" : "grid-cols-[0fr]",
             )}
           >
@@ -102,7 +101,7 @@ export function Sidebar() {
   return (
     <ul
       class={cn(
-        "menu menu-lg bg-base-200 transition-[width] duration-300 ease-in-out min-w-18 sticky left-0 top-0",
+        "menu menu-lg bg-base-200 transition-[width] duration-300 ease-linear min-w-18 sticky left-0 top-0",
         isSidebarOpen() ? "w-80" : "w-18",
       )}
     >

@@ -118,9 +118,10 @@ async function editStory(
   id: string,
   patch: Partial<EditableStoryFields>,
   thumbnail?: Blob
-): Promise<void> {
+): Promise<Story> {
   const updated = await updateStory(id, patch, thumbnail);
   setState("stories", (prev) => prev.map((s) => (s.id === id ? updated : s)));
+  return updated;
 }
 
 async function removeStory(id: string): Promise<void> {

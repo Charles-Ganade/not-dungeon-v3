@@ -1,12 +1,13 @@
 import { Modal, Flex, Text, Box } from "@/app/components";
 import { GlobalSettings } from "@/core/types";
 import { createSignal, For } from "solid-js";
-import { cn, debounce } from "@/utils";
+import { cn } from "@/utils";
 import { APIPanel } from "./ApiPanel";
 import { settingsStore } from "@/store";
 import { ParametersPanel } from "./ParametersPanel";
 import { UiPanel } from "./UiPanel";
 import { PromptsPanel } from "./PromptsPanel";
+import { debounce } from "lodash";
 
 interface SettingsProps {
   open: () => boolean;

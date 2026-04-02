@@ -58,13 +58,9 @@ export async function runScript(
 
   const code = [library, hookScript].filter(Boolean).join("\n\n");
 
-  // Wrap in an async IIFE so scripts can use await freely.
-  // All argument names besides `ctx` are shadowed to prevent
-  // access to globals via the argument list trick.
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const fn = new AsyncFunction(
     "ctx",
-    // Shadow common escape hatches
     "window", "document", "globalThis", "self", "fetch", "XMLHttpRequest",
     `"use strict";\n${code}`
   ) as (...args: unknown[]) => Promise<void>;
@@ -88,11 +84,15 @@ function makeStopFlag(): StopFlag {
 
 export type ScriptLogEntry = { level: "log" | "warn" | "error"; args: unknown[] };
 
-function makeLogger(entries: ScriptLogEntry[]) {
+function makeLogger(entries: ScriptLogEntry[], onLog?: (entry: ScriptLogEntry) => void) {
+  const push = (entry: ScriptLogEntry) => {
+    entries.push(entry);
+    onLog?.(entry);
+  };
   return {
-    log: (...args: unknown[]) => entries.push({ level: "log", args }),
-    warn: (...args: unknown[]) => entries.push({ level: "warn", args }),
-    error: (...args: unknown[]) => entries.push({ level: "error", args }),
+    log:   (...args: unknown[]) => push({ level: "log",   args }),
+    warn:  (...args: unknown[]) => push({ level: "warn",  args }),
+    error: (...args: unknown[]) => push({ level: "error", args }),
   };
 }
 
@@ -132,18 +132,18 @@ export function createHookContexts(params: {
   activeMemories: Memory[];
   config: ResolvedConfig;
   scriptStream: ScriptStream;
-  essentials: string;     // story.essentials at turn start
-  scriptState: string;    // story.scriptState at turn start
+  essentials: string;
+  scriptState: string;
+  onLog?: (entry: ScriptLogEntry) => void;
 }): HookContexts {
+  
   const { inputText, story, activePath, activeMemories, config, scriptStream } = params;
-
+ 
   const stopFlag = makeStopFlag();
   const logEntries: ScriptLogEntry[] = [];
-  const logger = makeLogger(logEntries);
-  const memory = makeMemoryProxy(story.memory);
+  const logger = makeLogger(logEntries, params.onLog);
   const pendingStoryCards: Omit<StoryCard, "id" | "createdAt" | "updatedAt">[] = [];
 
-  // Immutable state snapshot scripts can inspect
   const stateSnapshot = Object.freeze({
     messages: Object.freeze([...activePath]),
     memories: Object.freeze([...activeMemories]),
@@ -152,26 +152,22 @@ export function createHookContexts(params: {
 
   const base = {
     state: stateSnapshot,
-    memory,
+    kvMemory: makeMemoryProxy(story.kvMemory),
     config: Object.freeze(config),
-    log: logger.log,
+    console: logger,
     stop: (reason = "") => { stopFlag.stopped = true; stopFlag.reason = reason; },
     ai: { stream: scriptStream },  
-    essentials: params.essentials,   // mutable — hooks assign ctx.essentials = "..."
-    scriptState: params.scriptState, // mutable — hooks assign ctx.scriptState = "..."
+    essentials: params.essentials,
+    scriptState: params.scriptState,
   };
 
-  // Mutable input box — the script can reassign ctx.input
   const inputCtx: InputHookContext = {
     ...base,
     input: inputText,
     inject: (_text: string) => {
-      // Injected messages are queued here; the engine reads them back
-      // from inputCtx after the hook runs.
     },
   };
 
-  // Injected messages collected by inject()
   const injectedMessages: ContextMessage[] = [];
   inputCtx.inject = (text: string) => {
     injectedMessages.push({ role: "system", content: text });

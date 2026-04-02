@@ -120,10 +120,10 @@ export interface StoryCard {
    */
   triggers: string[];
   /**
-   * Free-form tag for grouping cards in the UI.
+   * Free-form tags for grouping cards in the UI.
    * e.g. "character", "location", "lore", "rule"
    */
-  tag: string;
+  tags: string[];
   enabled: boolean;
   createdAt: number;
   updatedAt: number;
@@ -178,6 +178,13 @@ export interface Story {
    * Not present on Scenario — this is per-playthrough only.
    */
   scriptState: string;
+
+  /**
+   * key value memory that persists. Does not get tracked by deltas,
+   * only use this for storing settings and configurations, otherwise
+   * use scriptState
+   */
+  kvMemory: Record<string, unknown>;
 
   messages: HistoryMessage[];
   currentLeafId: string | null
