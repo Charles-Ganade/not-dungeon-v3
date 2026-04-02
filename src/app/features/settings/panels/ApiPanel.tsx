@@ -2,9 +2,6 @@ import { list as listProviders } from "@/services/llm/registry";
 import { settingsStore } from "@/store";
 import { FaSolidEye, FaSolidEyeSlash, FaSolidRefresh } from "solid-icons/fa";
 import {
-  Accessor,
-  Setter,
-  Resource,
   For,
   Show,
   createSignal,
@@ -12,12 +9,11 @@ import {
   createResource,
   on,
 } from "solid-js";
-import { PanelLabel } from "./PanelLabel";
+import { PanelLabel } from "../PanelLabel";
 import { Flex, Text } from "@/app/components";
 import { listModels } from "@/services/llm";
 import { toast } from "solid-sonner";
-import { debounce } from "@/utils";
-import { debouncedPatch } from "./Settings";
+import { debouncedPatch } from "../Settings";
 
 const fetchModels = ([providerId, endpoint, apiKey]: Parameters<
   typeof listModels
@@ -46,24 +42,28 @@ export function APIPanel() {
     ),
   );
   return (
-    <Flex direction={"col"} class="gap-2">
+    <Flex direction={"col"} class="gap-2 w-full">
       <PanelLabel>API Settings</PanelLabel>
       <Flex direction={"col"} class="px-4">
         <Flex>
           <div>
             <Text>Provider</Text>
-            <select class="select ">
+            <select
+              class="select"
+              value={settingsStore.settings.API.providerId}
+              onChange={(e) => {
+                settingsStore.patch({
+                  API: { providerId: e.currentTarget.value },
+                });
+              }}
+            >
               <For each={listProviders()}>
                 {(provider) => (
                   <option
+                    value={provider.id}
                     selected={
                       settingsStore.settings.API.providerId === provider.id
                     }
-                    onClick={async () => {
-                      await settingsStore.patch({
-                        API: { providerId: provider.id },
-                      });
-                    }}
                   >
                     {provider.label}
                   </option>
@@ -117,15 +117,19 @@ export function APIPanel() {
         <div>
           <Text>Model</Text>
           <Flex class="gap-2">
-            <select class="select  flex-1">
+            <select
+              class="select flex-1"
+              value={settingsStore.settings.API.model}
+              onChange={(e) => {
+                settingsStore.patch({ API: { model: e.currentTarget.value } });
+              }}
+            >
               <Show when={!listModelsResult.error}>
                 <For each={listModelsResult() ?? []}>
                   {(model) => (
                     <option
+                      value={model}
                       selected={settingsStore.settings.API.model === model}
-                      onClick={() => {
-                        settingsStore.patch({ API: { model } });
-                      }}
                     >
                       {model}
                     </option>

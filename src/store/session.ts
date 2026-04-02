@@ -1,8 +1,8 @@
-import { createStore, produce, reconcile } from "solid-js/store";
+import { createStore, produce, reconcile, StoreSetter, unwrap } from "solid-js/store";
 import { createMemo } from "solid-js";
-import { saveStory, touchStory } from "@/services/db";
+import { saveStory, saveThumbnail, touchStory } from "@/services/db";
 import { libraryStore } from "./library";
-import type { Story, HistoryMessage, Memory, StoryCard } from "@/core/types/stories";
+import type { Story, HistoryMessage, Memory, StoryCard, ScriptBundle } from "@/core/types/stories";
 import type { Session, Delta, DeltaTransaction } from "@/core/types/sessions";
 
 interface SessionState {
@@ -49,6 +49,18 @@ const activeMemories = createMemo<Memory[]>(() => {
   );
 });
 
+const siblingLeaves = createMemo<HistoryMessage[]>(() => {
+  const story = state.story;
+  if (!story || !story.currentLeafId) return [];
+
+  const currentLeaf = story.messages.find((m) => m.id === story.currentLeafId);
+  if (!currentLeaf) return [];
+
+  return story.messages.filter(
+    (m) => m.parentId === currentLeaf.parentId && m.id !== story.currentLeafId
+  );
+});
+
 let _saveTimer: ReturnType<typeof setTimeout> | null = null;
 const SAVE_DEBOUNCE_MS = 1000;
 
@@ -57,16 +69,19 @@ function scheduleSave(): void {
   _saveTimer = setTimeout(async () => {
     _saveTimer = null;
     if (!state.story) return;
-    await saveStory(state.story);
+    await saveStory(unwrap(state.story));
     libraryStore.syncStory(state.story);
   }, SAVE_DEBOUNCE_MS);
 }
 
 async function open(story: Story): Promise<void> {
+  const now = Date.now();
   await touchStory(story.id);
+  const activeStory = { ...story, lastPlayedAt: now };
+  libraryStore.syncStory(activeStory);
 
   const session: Session = {
-    storyId: story.id,
+    storyId: activeStory.id,
     activePath: [],
     undoStack: [],
     redoStack: [],
@@ -74,7 +89,21 @@ async function open(story: Story): Promise<void> {
     pendingTransactionId: null,
   };
 
-  setState(reconcile({ story, session }));
+  setState(reconcile({ story: activeStory, session }));
+
+  if (activeStory.openingPrompt.trim() && activeStory.messages.length === 0) {
+    const openingMessage: HistoryMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      text: activeStory.openingPrompt,
+      parentId: null,
+      thinkingBlocks: [],
+      createdAt: Date.now(),
+    };
+    sessionStore.beginTransaction("Opening prompt");
+    sessionStore.enqueue({ type: "message:add", message: openingMessage });
+    sessionStore.commit();
+  }
 }
 
 function close(): void {
@@ -272,12 +301,233 @@ function switchBranch(leafId: string): void {
   scheduleSave();
 }
 
+function eraseLastMessage(): void {
+  const story = sessionStore.story;
+  if (!story || !story.currentLeafId) return;
+
+  const msg = story.messages.find((m) => m.id === story.currentLeafId);
+  if (!msg) return;
+
+  sessionStore.beginTransaction("Erase last message");
+  sessionStore.enqueue({ type: "message:remove", message: msg });
+  sessionStore.commit();
+}
+
+/**
+ * Edits an existing message in-place without generating a new response.
+ * Useful for fixing typos or manually tweaking the AI's response.
+ * Because it uses deltas, this action is fully undoable.
+ */
+export function editMessage(messageId: string, newText: string): void {
+  const story = sessionStore.story;
+  if (!story) return;
+
+  const msg = story.messages.find((m) => m.id === messageId);
+  if (!msg || msg.text === newText) return;
+
+  sessionStore.beginTransaction("Edit message");
+  sessionStore.enqueue({
+    type: "message:edit",
+    messageId,
+    prev: msg.text,
+    next: newText,
+  });
+  sessionStore.commit();
+}
+
+/**
+ * Edits the essentials (world/story details) section of the current story.
+ * Changes are tracked as deltas and fully undoable.
+ * Used for maintaining important world/character/setting information.
+ */
+export function editEssentials(newText: string): void {
+  const story = sessionStore.story;
+  if (!story || story.essentials === newText) return;
+
+  sessionStore.beginTransaction("Edit essentials");
+  sessionStore.enqueue({
+    type: "essentials:edit",
+    prev: story.essentials,
+    next: newText,
+  });
+  sessionStore.commit();
+}
+
+/**
+ * Edits the script state (persistent JSON data for hooks) of the current story.
+ * Changes are tracked as deltas and fully undoable.
+ * Used for maintaining script-controlled game state that persists across turns.
+ */
+export function editScriptState(newText: string): void {
+  const story = sessionStore.story;
+  if (!story || story.scriptState === newText) return;
+
+  sessionStore.beginTransaction("Edit script state");
+  sessionStore.enqueue({
+    type: "scriptState:edit",
+    prev: story.scriptState,
+    next: newText,
+  });
+  sessionStore.commit();
+}
+
+/**
+ * Updates story metadata (name, description, authorNotes, instructions) during play.
+ * These changes are NOT tracked as deltas (not essential to gameplay).
+ * Pass only the properties you want to update.
+ */
+export function editStoryMetadata(updates: Partial<Pick<Story, "name" | "description" | "authorNotes" | "instructions" | "kvMemory">>): void {
+  const story = sessionStore.story;
+  if (!story) return;
+
+  const hasChanges = Object.entries(updates).some(
+    ([key, value]) => story[key as keyof typeof updates] !== value
+  );
+
+  if (!hasChanges) return;
+
+  setState("story", updates);
+  scheduleSave();
+}
+
+export function editKvMemory(data: Record<string, unknown>) {
+  const kv = sessionStore.story?.kvMemory;
+  if (!kv) return;
+
+  const hasChanges = Object.entries(data).some(
+    ([key, value]) => kv[key as keyof typeof data] !== value
+  );
+
+  if (!hasChanges) return;
+
+  setState("story", "kvMemory", data);
+  scheduleSave();
+}
+
+/**
+ * Updates the active story's thumbnail.
+ * Saves the new blob to the database to generate an ID, updates the session state,
+ * and schedules a background save (which automatically handles garbage collecting the old thumbnail).
+ * Pass `null` to clear the current thumbnail.
+ */
+async function editThumbnail(blob: Blob | null): Promise<void> {
+  if (!state.story) return;
+
+  let newThumbnailId: string | undefined = undefined;
+  
+  if (blob) {
+    newThumbnailId = await saveThumbnail(blob);
+  }
+
+  setState("story", "thumbnailId", newThumbnailId);
+  scheduleSave();
+}
+
+export function editScripts(updates: Partial<ScriptBundle>): void {
+  const scripts = sessionStore.story?.scripts;
+  if (!scripts) return;
+
+  const hasChanges = Object.entries(updates).some(
+    ([key, value]) => scripts[key as keyof typeof updates] !== value
+  );
+
+  if (!hasChanges) return;
+
+  setState("story", "scripts", updates);
+  scheduleSave();
+}
+
+function editMemory(memoryId: string, memory: string | ((prev: string) => string)) {
+  const memories = activeMemories();
+  if (!memories) return;
+  const prev = activeMemories().find(m => m.id === memoryId)?.content;
+  let next: string;
+  if (!prev) return;
+  beginTransaction(`editing memory: ${memoryId}`);
+  if (typeof memory === "function") {
+    next = memory(prev);
+  }
+  else {
+    next = memory;
+  }
+  enqueue({
+    type: "memory:edit",
+    prev, next, memoryId
+  })
+  commit();
+}
+
+function addStoryCard(card: StoryCard | StoryCard[]) {
+  const storyCards = sessionStore.story?.storyCards;
+  if (!storyCards) return;
+  beginTransaction("adding story card/s");
+  if (Array.isArray(card)) {
+    card.forEach(c => {
+      enqueue({
+        type: "storyCard:add",
+        card: c
+      });
+    })
+  }
+  else {
+    enqueue({
+      type: "storyCard:add",
+      card
+    })
+  }
+  commit();
+}
+
+function editStoryCard(cardId: string, card: StoryCard | ((prev: StoryCard) => StoryCard)) {
+  const storyCards = sessionStore.story?.storyCards;
+  if (!storyCards) return;
+
+  const index = state.story!.storyCards.findIndex(
+    (item) => item.id === cardId,
+  );
+
+  if (index === -1) throw new Error(`Story card with id ${cardId} does not exist`);
+
+  const prev = storyCards[index];
+  const next = typeof card === "function" ? card(prev) : card;
+
+  beginTransaction(`Editing story card ${cardId}`);
+  enqueue({
+    type: "storyCard:edit",
+    cardId,
+    prev,
+    next
+  })
+  commit();
+}
+
+function removeStoryCard(cardId: string) {
+  const storyCards = sessionStore.story?.storyCards;
+  if (!storyCards) return;
+
+  const index = state.story!.storyCards.findIndex(
+    (item) => item.id === cardId,
+  );
+
+  if (index === -1) throw new Error(`Story card with id ${cardId} does not exist`);
+
+  const card = storyCards[index];
+
+  beginTransaction(`deleting story card ${cardId}`);
+  enqueue({
+    type: "storyCard:remove",
+    card
+  });
+  commit();
+}
+
 export const sessionStore = {
   // Reactive reads
   get story() { return state.story; },
   get session() { return state.session; },
   get activePath() { return activePath(); },
   get activeMemories() { return activeMemories(); },
+  get siblingLeaves() { return siblingLeaves(); },
   get isGenerating() { return state.session?.isGenerating ?? false; },
   get canUndo() { return (state.session?.undoStack.length ?? 0) > 0; },
   get canRedo() { return (state.session?.redoStack.length ?? 0) > 0; },
@@ -289,5 +539,8 @@ export const sessionStore = {
   beginTransaction, enqueue, commit, rollback, setGenerating,
 
   // User actions
-  undo, redo, switchBranch,
+  undo, redo, switchBranch, eraseLastMessage, editMessage,
+  editEssentials, editScriptState, editStoryMetadata, editScripts, editThumbnail,
+  addStoryCard, editStoryCard, removeStoryCard,
+  editMemory, editKvMemory
 };

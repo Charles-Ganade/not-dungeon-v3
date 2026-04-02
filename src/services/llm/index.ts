@@ -1,6 +1,7 @@
 import "./providers/openai";
 import "./providers/anthropic";
 import "./providers/ollama";
+import "./providers/mistral"
 
 import { get, list } from "./registry";
 import type { LLMRequest, LLMChunk, LLMMessage, ScriptStream } from "./types";

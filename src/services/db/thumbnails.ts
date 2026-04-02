@@ -21,3 +21,21 @@ export async function getThumbnailUrl(id: string): Promise<string | null> {
 export async function deleteThumbnail(id: string): Promise<void> {
   await db.thumbnails.delete(id);
 }
+
+/**
+ * Check if a thumbnail is still referenced by any story or scenario.
+ * Only delete if this returns false.
+ */
+export async function isThumbnailReferenced(thumbnailId: string): Promise<boolean> {
+  const storyUsingIt = await db.stories
+    .where("thumbnailId")
+    .equals(thumbnailId)
+    .first();
+  
+  const scenarioUsingIt = await db.scenarios
+    .where("thumbnailId")
+    .equals(thumbnailId)
+    .first();
+  
+  return !!storyUsingIt || !!scenarioUsingIt;
+}

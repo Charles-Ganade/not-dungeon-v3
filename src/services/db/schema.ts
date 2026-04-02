@@ -22,10 +22,10 @@ class AppDatabase extends Dexie {
   constructor() {
     super("not-dungeon");
 
-    this.version(1).stores({
+    this.version(2).stores({
       settings: "id",
-      scenarios: "id, *tags, createdAt, updatedAt",
-      stories: "id, scenarioId, lastPlayedAt, createdAt",
+      scenarios: "id, *tags, createdAt, updatedAt, thumbnailId",
+      stories: "id, scenarioId, lastPlayedAt, createdAt, thumbnailId",
       thumbnails: "id",
     });
   }

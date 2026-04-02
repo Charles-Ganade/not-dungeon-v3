@@ -6,10 +6,15 @@ import type {
   InputHookContext,
   BuildContextHookContext,
   OutputHookContext,
+  BaseHookContext,
 } from "@/core/types/hooks";
 import type { ContextMessage } from "@/core/types/hooks";
 import type { ScriptStream } from "@/services/llm/types";
 import type { HistoryMessage, Memory } from "@/core/types/stories";
+import { RunnerApi, SandboxCallbacks } from "./script.worker";
+import * as Comlink from "comlink";
+import ScriptWorker from "./script.worker?worker";
+import { unwrap } from "solid-js/store";
 
 /**
  * Merges a scenario's full ScriptBundle with a story's partial
@@ -52,32 +57,99 @@ const SCRIPT_TIMEOUT_MS = 5000;
 export async function runScript(
   library: string,
   hookScript: string,
-  ctx: Record<string, unknown>
+  ctx: Record<string, any>
 ): Promise<void> {
   if (!hookScript.trim()) return;
 
-  const code = [library, hookScript].filter(Boolean).join("\n\n");
+  // 1. Spin up a fresh, isolated worker thread for this script execution
+  const worker = new ScriptWorker();
+  const api = Comlink.wrap<RunnerApi>(worker);
 
-  // Wrap in an async IIFE so scripts can use await freely.
-  // All argument names besides `ctx` are shadowed to prevent
-  // access to globals via the argument list trick.
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-  const fn = new AsyncFunction(
-    "ctx",
-    // Shadow common escape hatches
-    "window", "document", "globalThis", "self", "fetch", "XMLHttpRequest",
-    `"use strict";\n${code}`
-  ) as (...args: unknown[]) => Promise<void>;
+  // 2. Extract static/clonable data from the complex ctx object
+  const ctxData = {
+    state: ctx.state,
+    config: ctx.config,
+    essentials: ctx.essentials,
+    scriptState: ctx.scriptState,
+    currentTurnIds: ctx.currentTurnIds,
+    input: ctx.input,
+    messages: ctx.messages,
+    estimatedTokens: ctx.estimatedTokens,
+    activeStoryCards: ctx.activeStoryCards,
+    output: ctx.output,
+    rawOutput: ctx.rawOutput,
+    suppressDefaultSummarizer: ctx.suppressDefaultSummarizer,
+    kvMemoryData: ctx.kvMemory?.all() || {},
+    _injected: ctx._injected || []
+  };
 
-  await Promise.race([
-    fn(ctx, undefined, undefined, undefined, undefined, undefined, undefined),
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`Script timed out after ${SCRIPT_TIMEOUT_MS}ms`)),
-        SCRIPT_TIMEOUT_MS
-      )
-    ),
-  ]);
+  const streamHandlers = new Map<string, AsyncIterator<any>>();
+
+  // 3. Define the callbacks that the worker can trigger via proxy
+  const callbacks: SandboxCallbacks = {
+    log: (...args) => ctx.console?.log(...args),
+    warn: (...args) => ctx.console?.warn(...args),
+    error: (...args) => ctx.console?.error(...args),
+    stop: (reason) => ctx.stop?.(reason),
+    startStream: async (input) => {
+      const id = crypto.randomUUID();
+      const iterable = ctx.ai.stream(input);
+      streamHandlers.set(id, iterable[Symbol.asyncIterator]());
+      return id;
+    },
+    streamNext: async (id) => {
+      const iterator = streamHandlers.get(id);
+      if (!iterator) return { done: true, value: undefined };
+      const res = await iterator.next();
+      if (res.done) streamHandlers.delete(id);
+      return res;
+    }
+  };
+
+  const proxyCallbacks = Comlink.proxy(callbacks);
+
+  try {
+    const resultPromise = api.execute(library, hookScript, unwrap(ctxData), proxyCallbacks);
+    
+    const result = await Promise.race([
+      resultPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Script timed out after ${SCRIPT_TIMEOUT_MS}ms`)), SCRIPT_TIMEOUT_MS)
+      ),
+    ]);
+
+    // 5. Apply the returned mutations back to the main thread's live ctx object
+    if (result.essentials !== undefined) ctx.essentials = result.essentials;
+    if (result.scriptState !== undefined) ctx.scriptState = result.scriptState;
+    if (result.input !== undefined) ctx.input = result.input;
+    if (result.output !== undefined) ctx.output = result.output;
+    if (result.messages !== undefined) ctx.messages = result.messages;
+    if (result.suppressDefaultSummarizer !== undefined) ctx.suppressDefaultSummarizer = result.suppressDefaultSummarizer;
+    if (result._injected !== undefined) (ctx as any)._injected = result._injected;
+
+    // Merge operations safely back into the context arrays
+    if (result.memoriesOperations && ctx.memoriesOperations) {
+        ctx.memoriesOperations.add.push(...result.memoriesOperations.add);
+        ctx.memoriesOperations.edit.push(...result.memoriesOperations.edit);
+        ctx.memoriesOperations.delete.push(...result.memoriesOperations.delete);
+    }
+    if (result.storyCardOperations && ctx.storyCardOperations) {
+        ctx.storyCardOperations.add.push(...result.storyCardOperations.add);
+        ctx.storyCardOperations.edit.push(...result.storyCardOperations.edit);
+        ctx.storyCardOperations.delete.push(...result.storyCardOperations.delete);
+    }
+
+    if (ctx.kvMemory && result.kvMemoryData) {
+      const oldKeys = Object.keys(ctx.kvMemory.all());
+      for (const key of oldKeys) ctx.kvMemory.delete(key);
+      for (const [k, v] of Object.entries(result.kvMemoryData)) {
+        ctx.kvMemory.set(k, v);
+      }
+    }
+
+  } finally {
+    worker.terminate();
+  }
 }
 
 interface StopFlag { stopped: boolean; reason: string }
@@ -88,11 +160,15 @@ function makeStopFlag(): StopFlag {
 
 export type ScriptLogEntry = { level: "log" | "warn" | "error"; args: unknown[] };
 
-function makeLogger(entries: ScriptLogEntry[]) {
+function makeLogger(entries: ScriptLogEntry[], onLog?: (entry: ScriptLogEntry) => void) {
+  const push = (entry: ScriptLogEntry) => {
+    entries.push(entry);
+    onLog?.(entry);
+  };
   return {
-    log: (...args: unknown[]) => entries.push({ level: "log", args }),
-    warn: (...args: unknown[]) => entries.push({ level: "warn", args }),
-    error: (...args: unknown[]) => entries.push({ level: "error", args }),
+    log:   (...args: unknown[]) => push({ level: "log",   args }),
+    warn:  (...args: unknown[]) => push({ level: "warn",  args }),
+    error: (...args: unknown[]) => push({ level: "error", args }),
   };
 }
 
@@ -105,24 +181,58 @@ function makeMemoryProxy(bag: Record<string, unknown>) {
   };
 }
 
+export interface StoryCardOperations {
+  add: Omit<StoryCard, "id" | "createdAt" | "updatedAt">[];
+  edit: {
+    id: string;
+    prev: StoryCard;
+    next: Omit<StoryCard, "id" | "createdAt" | "updatedAt">;
+  }[];
+  delete: StoryCard[]
+}
+
+export interface MemoryOperations {
+  add: Pick<Memory, "content" | "messageIds">[];
+  edit: {
+    id: string;
+    prev: string;
+  next: string;
+  }[];
+  delete: Memory[];
+}
+
 export interface HookContexts {
-  input: InputHookContext;
+  input: InputHookContext & {
+    memoriesOperations: MemoryOperations;
+  };
   buildContext: (
+    state: {
+      memories: readonly Memory[];
+      storyCards: readonly StoryCard[];
+    },
     messages: ContextMessage[], 
     estimatedTokens: number, 
     activeStoryCards: StoryCard[],
     essentials: string,
     scriptState: string
-  ) => BuildContextHookContext;
+  ) => BuildContextHookContext & {
+    memoriesOperations: MemoryOperations;
+  };
   output: (
+    state: {
+      memories: readonly Memory[];
+      storyCards: readonly StoryCard[];
+    },
     output: string, 
     rawOutput: string,
     essentials: string,
     scriptState: string
-  ) => OutputHookContext;
+  ) => OutputHookContext & {
+    storyCardOperations: StoryCardOperations,
+    memoriesOperations: MemoryOperations;
+  };
   stopFlag: StopFlag;
   logEntries: ScriptLogEntry[];
-  pendingStoryCards: Omit<StoryCard, "id" | "createdAt" | "updatedAt">[];
 }
 
 export function createHookContexts(params: {
@@ -132,46 +242,86 @@ export function createHookContexts(params: {
   activeMemories: Memory[];
   config: ResolvedConfig;
   scriptStream: ScriptStream;
-  essentials: string;     // story.essentials at turn start
-  scriptState: string;    // story.scriptState at turn start
+  essentials: string;
+  scriptState: string;
+  onLog?: (entry: ScriptLogEntry) => void;
+  assistantMsgId: string;
+  userMsgId: string | null;
 }): HookContexts {
+  
   const { inputText, story, activePath, activeMemories, config, scriptStream } = params;
-
+ 
   const stopFlag = makeStopFlag();
   const logEntries: ScriptLogEntry[] = [];
-  const logger = makeLogger(logEntries);
-  const memory = makeMemoryProxy(story.memory);
-  const pendingStoryCards: Omit<StoryCard, "id" | "createdAt" | "updatedAt">[] = [];
+  const logger = makeLogger(logEntries, params.onLog);
 
-  // Immutable state snapshot scripts can inspect
   const stateSnapshot = Object.freeze({
     messages: Object.freeze([...activePath]),
     memories: Object.freeze([...activeMemories]),
     storyCards: Object.freeze([...story.storyCards]),
   });
 
+  const storyCardOperations: StoryCardOperations = {
+    add: [],
+    edit: [],
+    delete: [],
+  }
+
+  const memoryOperationsBuilder = (source: {
+    memories: readonly Memory[];
+    storyCards: readonly StoryCard[];
+  }) => {
+    const memoriesOperations: MemoryOperations = {
+      add: [],
+      edit: [],
+      delete: []
+    }
+    const addMemory = (memory: Pick<Memory, "content" | "messageIds">) => { memoriesOperations.add.push(memory)}
+    const editMemory = (id: string, content: string | ((prev: string) => string)) => {
+      if (memoriesOperations.delete.some(m => m.id === id)) return;
+      const pendingEdit = memoriesOperations.edit.find(e => e.id === id);
+      const baseContent = pendingEdit 
+        ? pendingEdit.next 
+        : source.memories.find(m => m.id === id)?.content;
+      if (baseContent === undefined) return;
+      const nextContent = typeof content === "string" ? content : content(baseContent);
+      if (pendingEdit) {
+        pendingEdit.next = nextContent;
+      } else {
+        const prevMemory = source.memories.find(m => m.id === id)!;
+        memoriesOperations.edit.push({id, prev: prevMemory.content, next: nextContent});
+      }
+    }
+    const removeMemory = (id: string) => {
+      const prevMemory = source.memories.find(m => m.id === id);
+      if (!prevMemory) return;
+      memoriesOperations.delete.push(prevMemory)
+    }
+    return {addMemory, editMemory, removeMemory, memoriesOperations}
+  }
+
   const base = {
     state: stateSnapshot,
-    memory,
+    kvMemory: makeMemoryProxy(story.kvMemory),
     config: Object.freeze(config),
-    log: logger.log,
+    console: logger,
     stop: (reason = "") => { stopFlag.stopped = true; stopFlag.reason = reason; },
     ai: { stream: scriptStream },  
-    essentials: params.essentials,   // mutable — hooks assign ctx.essentials = "..."
-    scriptState: params.scriptState, // mutable — hooks assign ctx.scriptState = "..."
+    essentials: params.essentials,
+    scriptState: params.scriptState,
+    currentTurnIds: {
+      user: params.userMsgId
+    }
   };
 
-  // Mutable input box — the script can reassign ctx.input
-  const inputCtx: InputHookContext = {
+  const inputCtx = {
     ...base,
     input: inputText,
     inject: (_text: string) => {
-      // Injected messages are queued here; the engine reads them back
-      // from inputCtx after the hook runs.
     },
+    ...memoryOperationsBuilder(base.state)
   };
 
-  // Injected messages collected by inject()
   const injectedMessages: ContextMessage[] = [];
   inputCtx.inject = (text: string) => {
     injectedMessages.push({ role: "system", content: text });
@@ -179,32 +329,73 @@ export function createHookContexts(params: {
   (inputCtx as unknown as { _injected: ContextMessage[] })._injected = injectedMessages;
 
   const buildContextFn = (
+    state: {
+      memories: readonly Memory[];
+      storyCards: readonly StoryCard[];
+    },
     messages: ContextMessage[],
     estimatedTokens: number,
     activeStoryCards: StoryCard[], 
     essentials: string, 
     scriptState: string
-  ): BuildContextHookContext => ({
+  ) => ({
     ...base,
+    state: {...base.state, ...state},
     messages,
     estimatedTokens,
     essentials,
     scriptState,
     activeStoryCards: Object.freeze([...activeStoryCards]),
+    ...memoryOperationsBuilder(state)
   });
 
   const outputFn = (
+    state: {
+      memories: readonly Memory[];
+      storyCards: readonly StoryCard[];
+    },
     output: string, 
     rawOutput: string, 
     essentials: string, 
     scriptState: string
-  ): OutputHookContext => ({
+  ): OutputHookContext & {
+    storyCardOperations: StoryCardOperations,
+    memoriesOperations: MemoryOperations;
+  } => ({
     ...base,
+    currentTurnIds: {
+      ...base.currentTurnIds,
+      assistant: params.assistantMsgId
+    },
+    state: {...base.state, ...state},
     output,
     rawOutput,
     essentials,
     scriptState,
-    addStoryCard: (card) => { pendingStoryCards.push(card); },
+    ...memoryOperationsBuilder(state),
+    addStoryCard: (card) => { storyCardOperations.add.push(card); },
+    editStoryCard(id, card) {
+      if (storyCardOperations.delete.some(m => m.id === id)) return;
+      const pendingEdit = storyCardOperations.edit.find(e => e.id === id);
+      const baseContent = pendingEdit 
+        ? pendingEdit.next 
+        : state.storyCards.find(s => s.id === id);
+      if (!baseContent) return;
+      const nextContent = typeof card === "function" ? card(baseContent) : card;
+      if (pendingEdit) {
+        pendingEdit.next = nextContent;
+      } else {
+        const prevCard = state.storyCards.find(m => m.id === id)!;
+        storyCardOperations.edit.push({id, prev: prevCard, next: nextContent});
+      }
+    },
+    suppressDefaultSummarizer: false,
+    removeStoryCard(id) {
+      const prevStoryCard = state.storyCards.find(c => c.id === id);
+      if (!prevStoryCard) return;
+      storyCardOperations.delete.push(prevStoryCard);
+    },
+    storyCardOperations
   });
 
   return {
@@ -213,6 +404,5 @@ export function createHookContexts(params: {
     output: outputFn,
     stopFlag,
     logEntries,
-    pendingStoryCards,
   };
 }

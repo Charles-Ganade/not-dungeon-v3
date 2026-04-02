@@ -4,10 +4,14 @@ import { ScenarioCard } from "../ScenarioCard";
 import { StoryCard } from "../StoryCard";
 import { libraryStore } from "@/store";
 import { Scenario } from "@/core/types";
+import { useNavigate } from "@solidjs/router";
+import { makeStoryFromScenario } from "@/core/defaults";
+import { unwrap } from "solid-js/store";
 
 export function HomeView() {
   const scenarios = () => libraryStore.scenarios;
   const stories = () => libraryStore.stories;
+  const navigator = useNavigate();
 
   return (
     <div class="flex flex-col gap-6">
@@ -21,7 +25,7 @@ export function HomeView() {
               .slice(0, 5)
               .sort((a, b) => a.lastPlayedAt - b.lastPlayedAt)}
           >
-            {(story) => <StoryCard story={story} onPlay={() => {}} />}
+            {(story) => <StoryCard story={story} />}
           </For>
         </Flex>
       </Flex>
@@ -38,12 +42,22 @@ export function HomeView() {
               <Flex class="gap-4 overflow-x-auto min-w-0">
                 <ScenarioCard
                   scenario={scenario as Scenario}
-                  onNewStory={() => {}}
-                  onEdit={() => {}}
-                  onDelete={() => {}}
+                  onNewStory={async () => {
+                    const newStory = await libraryStore.addStory(
+                      makeStoryFromScenario(structuredClone(unwrap(scenario)), {
+                        name: scenario.name,
+                        description: scenario.description,
+                      }),
+                    );
+
+                    navigator(`/play/${newStory.id}`);
+                  }}
+                  onDelete={async () => {
+                    await libraryStore.removeScenario(scenario.id);
+                  }}
                 />
                 <For each={libraryStore.grouped().get(scenario.id)}>
-                  {(story) => <StoryCard story={story} onPlay={() => {}} />}
+                  {(story) => <StoryCard story={story} />}
                 </For>
               </Flex>
             </Flex>
@@ -56,7 +70,7 @@ export function HomeView() {
             </Flex>
             <Flex class="gap-4 overflow-x-auto min-w-0">
               <For each={libraryStore.grouped().get(undefined)}>
-                {(story) => <StoryCard story={story} onPlay={() => {}} />}
+                {(story) => <StoryCard story={story} />}
               </For>
             </Flex>
           </Flex>

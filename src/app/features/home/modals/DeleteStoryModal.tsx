@@ -19,7 +19,7 @@ export function DeleteStoryModal(props: DeleteStoryModalProps) {
       onClose={props.onClose}
     >
       <Flex direction={"col"} class="p-6 gap-4">
-        <Text variant={"h3"} weight={"bold"}>
+        <Text variant={"h4"} weight={"bold"}>
           Are you sure you want to delete {props.story.name}?
         </Text>
         <Flex class="p-2">

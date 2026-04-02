@@ -3,9 +3,18 @@ import { makeDefaultStory } from "@/core/defaults";
 import { Story } from "@/core/types";
 import { getThumbnailBlob } from "@/services/db";
 import { libraryStore } from "@/store";
-import { FiSave, FiX } from "solid-icons/fi";
-import { createEffect, createSignal, on, onCleanup, Show } from "solid-js";
+import { FiEdit, FiSave, FiX } from "solid-icons/fi";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  Show,
+} from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
+// @ts-ignore
+import TextareaAutosize from "solid-textarea-autosize";
 
 interface EditStoryModalProps {
   open: boolean;
@@ -15,14 +24,16 @@ interface EditStoryModalProps {
 
 export function EditStoryModal(props: EditStoryModalProps) {
   const originalStory = makeDefaultStory(props.story);
-  const [story, setStory] = createStore(makeDefaultStory(originalStory));
+  const [story, setStory] = createStore(structuredClone(unwrap(originalStory)));
   const [confirmModalOpen, setConfirmModalOpen] = createSignal(false);
   const [thumbBlob, setThumbBlob] = createSignal<Blob | null>(null);
   const [thumbBlobOriginal, setThumbBlobOriginal] = createSignal<Blob | null>(
     null,
   );
 
-  const thumbUrl = () => (thumbBlob() ? URL.createObjectURL(thumbBlob()!) : "");
+  const thumbUrl = createMemo(() =>
+    thumbBlob() ? URL.createObjectURL(thumbBlob()!) : "",
+  );
 
   const handleFile = (e: Event) => {
     const input = e.currentTarget as HTMLInputElement;
@@ -68,9 +79,15 @@ export function EditStoryModal(props: EditStoryModalProps) {
     close();
   };
 
-  const isChanged = () =>
-    JSON.stringify(unwrap(story)) !== JSON.stringify(originalStory) ||
-    thumbBlob() !== thumbBlobOriginal();
+  const isChanged = createMemo(() => {
+    return (
+      story.name !== originalStory.name ||
+      story.description !== originalStory.description ||
+      story.essentials !== originalStory.essentials ||
+      story.authorNotes !== originalStory.authorNotes ||
+      thumbBlob() !== thumbBlobOriginal()
+    );
+  });
 
   return (
     <Modal
@@ -102,20 +119,32 @@ export function EditStoryModal(props: EditStoryModalProps) {
           </button>
         </div>
         <div class="absolute inset-0 bg-base-300/80 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <input
-            type="file"
-            accept="image/*"
-            class="file-input file-input-primary w-fit"
-            onInput={handleFile}
+          <label
+            class="btn btn-lg btn-circle btn-primary"
             onClick={(e) => e.stopPropagation()}
-          />
+          >
+            <Text>
+              <FiEdit />
+            </Text>
+            <input type="file" class="hidden" onInput={handleFile} />
+          </label>
         </div>
       </figure>
       <Flex direction={"col"} class="p-6 flex-1 min-h-0">
         <Flex justify={"between"} align={"center"} class="h-fit">
           <Text variant={"h3"} weight={"bold"}>
-            Quick Start a Story
+            Edit Story: {story.name}
           </Text>
+          <button
+            class="btn btn-secondary"
+            onClick={saveAndClose}
+            disabled={!isChanged()}
+          >
+            <Text>
+              <FiSave />
+            </Text>
+            <Text>Save Edits</Text>
+          </button>
         </Flex>
         <Flex direction={"col"} class="min-h-0 overflow-y-auto flex-1 h-fit">
           <div class="flex flex-col gap-1">
@@ -129,6 +158,7 @@ export function EditStoryModal(props: EditStoryModalProps) {
                 onInput={({ currentTarget }) => {
                   setStory("name", currentTarget.value);
                 }}
+                accept="image/*"
               />
             </label>
           </div>
@@ -136,9 +166,10 @@ export function EditStoryModal(props: EditStoryModalProps) {
             <Text weight={"semibold"} color={"muted"}>
               Description
             </Text>
-            <textarea
+            <TextareaAutosize
               class="textarea w-full h-32 resize-none"
               value={story.description}
+              // @ts-ignore
               onInput={({ currentTarget }) => {
                 setStory("description", currentTarget.value);
               }}
@@ -149,9 +180,10 @@ export function EditStoryModal(props: EditStoryModalProps) {
               <Text weight={"semibold"} color={"muted"}>
                 Essentials
               </Text>
-              <textarea
+              <TextareaAutosize
                 class="textarea w-full h-48 resize-none"
                 value={story.essentials}
+                // @ts-ignore
                 onInput={({ currentTarget }) => {
                   setStory("essentials", currentTarget.value);
                 }}
@@ -161,23 +193,16 @@ export function EditStoryModal(props: EditStoryModalProps) {
               <Text weight={"semibold"} color={"muted"}>
                 Author's Notes
               </Text>
-              <textarea
+              <TextareaAutosize
                 class="textarea w-full h-48 resize-none"
                 value={story.authorNotes}
+                // @ts-ignore
                 onInput={({ currentTarget }) => {
                   setStory("authorNotes", currentTarget.value);
                 }}
               />
             </div>
           </Flex>
-          <div class="flex justify-end pt-2 join">
-            <button class="btn btn-secondary" onClick={saveAndClose}>
-              <Text class="text-inherit">
-                <FiSave />
-              </Text>
-              <Text class="text-inherit">Save Edits</Text>
-            </button>
-          </div>
         </Flex>
       </Flex>
       <Modal

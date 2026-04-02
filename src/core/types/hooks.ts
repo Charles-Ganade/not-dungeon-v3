@@ -1,12 +1,15 @@
-import { HistoryMessage, Memory, ResolvedConfig, StoryCard } from "./stories";
+import type { HistoryMessage, Memory, ResolvedConfig, StoryCard } from "./stories";
+import type { ScriptStream } from "@/services/llm/types";
 
 /**
- * Fields available to every hook function.
+ * Fields available to all three script files (input.js, buildContext.js, output.js).
+ * Scripts access these as top-level properties on the `ctx` object.
  */
-interface BaseHookContext {
+export interface BaseHookContext {
   /**
-   * Read-only snapshot of the adventure's persistent memory bag.
-   * Mutate via ctx.memory.set() / ctx.memory.get() below.
+   * Read-only snapshot of the story state at the start of the turn.
+   * Reflects messages, memories, and story cards as they were when
+   * the turn began — not updated mid-turn.
    */
   readonly state: {
     readonly messages: readonly HistoryMessage[];
@@ -14,18 +17,49 @@ interface BaseHookContext {
     readonly storyCards: readonly StoryCard[];
   };
 
-  /**
-   * Mutable essentials
-   */
-  essentials: string
+  readonly currentTurnIds: {
+    readonly user: string | null;
+  }
 
   /**
-   * Mutable script state
+   * The story's essentials field. Mutable — assign a new string to
+   * update it. Changes are delta-tracked and visible to downstream
+   * scripts in the same turn.
    */
-  scriptState: string
+  essentials: string;
 
-  /** Persistent key-value store scoped to this adventure. */
-  memory: {
+  /**
+   * A persistent string for script state. Never sent to the AI.
+   * Useful for storing serialized JSON between turns. Mutable —
+   * changes are delta-tracked.
+   */
+  scriptState: string;
+
+  /**
+   * Adds a memory to the story. Enqueued as a delta.
+   * @param memory 
+   */
+  addMemory(memory: Omit<Memory, "id" | "editedAt" | "createdAt">): void
+
+  /**
+   * Edits a memory in the story. Enqueued as a delta.
+   * @param id id of the memory being edited
+   * @param content the new content of the string
+   */
+  editMemory(id: string, content: string | ((prev: string) => string)): void
+
+  /**
+   * Deletes a memory from the story. Enqueued as a delta.
+   * @param id id of the memory to delete
+   */
+  removeMemory(id: string): void
+
+  /**
+   * Persistent key-value store scoped to this story.
+   * Survives across turns. Not delta-tracked — changes are written
+   * directly to story.memory and persisted with the story.
+   */
+  kvMemory: {
     get<T = unknown>(key: string): T | undefined;
     set<T = unknown>(key: string, value: T): void;
     delete(key: string): void;
@@ -33,47 +67,54 @@ interface BaseHookContext {
   };
 
   /**
-   * Resolved configuration for the current request.
-   * Read-only — changing model params mid-turn is not supported.
+   * The resolved configuration for this turn.
+   * Read-only — model params cannot be changed mid-turn.
    */
   readonly config: Readonly<ResolvedConfig>;
 
   /**
-   * Logging function. Output is piped to the in-UI debug panel,
-   * not the browser console.
+   * Run a secondary AI call using the active provider and resolved
+   * config. Thinking is always disabled for script-initiated calls.
+   * Input can be a plain prompt string or a full messages array.
    */
-  log(...args: unknown[]): void;
+  ai: { stream: ScriptStream };
 
   /**
-   * Halts the current turn immediately. No further hooks run,
-   * no API call is made (if called before), and no message is
-   * appended. The pending delta transaction is discarded.
+   * Logger to the script debug panel in the UI.
+   * Does not write to the browser console.
+   */
+  console: {
+    log:   (...args: unknown[]) => void,
+    warn:  (...args: unknown[]) => void,
+    error: (...args: unknown[]) => void,
+  }
+
+  /**
+   * Halts the current turn immediately. No further scripts run,
+   * no API call is made (if not yet called), and no message is
+   * appended to history. The pending transaction is discarded.
    */
   stop(reason?: string): void;
 }
 
 /**
- * Context passed to the function defined in input.js.
- *
- * Called after the player submits text but before the context
- * is built or the API is called. Use this to sanitise, augment,
- * or redirect input.
+ * Context available in input.js.
+ * Runs after the player submits input, before the AI is called.
  */
 export interface InputHookContext extends BaseHookContext {
-  /** The raw text the player submitted. Mutate to change what gets used. */
+  /** The player's submitted text. Mutate to change what gets sent. */
   input: string;
 
   /**
-   * Injects a system-role message directly into the next
-   * request's messages array (bypasses the normal composition).
-   * Useful for injecting one-shot instructions.
+   * Injects a system-role message into the request's messages array.
+   * The injected message bypasses the normal context composition and
+   * is appended after the default system prompt.
    */
   inject(text: string): void;
 }
 
 /**
- * A single entry in the messages array as seen by buildContext.
- * Matches the OpenAI chat completion message shape.
+ * A single message entry in the array sent to the API.
  */
 export interface ContextMessage {
   role: "system" | "user" | "assistant";
@@ -81,80 +122,77 @@ export interface ContextMessage {
 }
 
 /**
- * Context passed to the function defined in buildContext.js.
- *
- * Called after the engine has assembled the default messages
- * array (history composition, memory substitution, story card
- * injection, author notes) but before it is sent to the API.
- *
- * The default builder composes the full history into one user
- * message. Scripts can replace this with any structure they want,
- * including true alternating-role conversations.
+ * Context available in buildContext.js.
+ * Runs after the default messages array is assembled, before the
+ * API call. The default builder composes the full history into a
+ * single user message — scripts can freely restructure this.
  */
 export interface BuildContextHookContext extends BaseHookContext {
   /**
    * The messages array that will be sent to the API.
-   * Fully mutable — reorder, add, remove, or replace entries.
+   * Fully mutable — reorder, replace, add, or remove entries.
    */
   messages: ContextMessage[];
 
   /**
-   * Estimated token count of the current messages array.
-   * Recalculated by the engine after this hook returns.
-   * Available here as a read-only hint for budget decisions.
+   * Rough token estimate for the current messages array (chars / 4).
+   * Read-only hint for budget decisions. Recalculated by the engine
+   * after this script finishes.
    */
   readonly estimatedTokens: number;
 
   /**
-   * Active story cards (those whose triggers matched the recent
-   * context). Available for inspection; already injected into
-   * messages by the default builder.
+   * Story cards whose trigger keywords matched the recent context.
+   * Already injected into messages by the default builder.
+   * Read-only — to modify cards use ctx.state.storyCards.
    */
   readonly activeStoryCards: readonly StoryCard[];
 }
 
 /**
- * Context passed to the function defined in output.js.
- *
- * Called after the API responds and the raw text has been
- * extracted from the stream, but before the message is appended
- * to the history or committed to the delta transaction.
- *
- * Mutations here ARE tracked as deltas (the committed message
- * contains the post-hook text, and the delta records the
- * difference).
+ * Context available in output.js.
+ * Runs after the AI responds, before the message is saved to history.
+ * Mutations to ctx.output are delta-tracked.
  */
 export interface OutputHookContext extends BaseHookContext {
-  /**
-   * The model's response text. Mutate to change what gets
-   * appended to the story history.
-   */
+  /** The AI's response text. Mutate to change what gets saved. */
   output: string;
 
-  /**
-   * The raw text before any hook modifications.
-   * Read-only — useful for diffing against ctx.output.
-   */
+  /** The original unmodified AI response. Read-only. */
   readonly rawOutput: string;
 
+  readonly currentTurnIds: {
+    readonly user: string | null;
+    readonly assistant: string;
+  }
+
   /**
-   * Convenience: append a story card to the adventure.
-   * Tracked as a storyCard:add delta inside the current
-   * transaction, so it undoes together with the AI response.
+   * Adds a story card to the story. The addition is enqueued as a
+   * storyCard:add delta inside the current transaction, so it undoes
+   * together with the AI response.
    */
   addStoryCard(card: Omit<StoryCard, "id" | "createdAt" | "updatedAt">): void;
-}
 
-export type OnInputFn = (ctx: InputHookContext) => void | Promise<void>;
-export type BuildContextFn = (ctx: BuildContextHookContext) => void | Promise<void>;
-export type OnOutputFn = (ctx: OutputHookContext) => void | Promise<void>;
+  /**
+   * Edits an existing story card.
+   * @param id id of the story card to edit
+   * @param card the new contents of the card
+   */
+  editStoryCard(
+    id: string, 
+    card: Omit<StoryCard, "id" | "createdAt" | "updatedAt"> | 
+    ((prev:Omit<StoryCard, "id" | "createdAt" | "updatedAt">) => 
+      Omit<StoryCard, "id" | "createdAt" | "updatedAt">)): void
 
-/**
- * The three hook functions the sandbox extracts after evaluating
- * all four script files. The engine calls these in order each turn.
- */
-export interface ResolvedHooks {
-  onInput: OnInputFn;
-  buildContext: BuildContextFn;
-  onOutput: OnOutputFn;
+  /**
+   * Deletes an existing story card
+   * @param id id of the story card to remove
+   */
+  removeStoryCard(id: string): void;
+
+  /**
+   * If set to `true`, this stops the default 
+   * auto-summarizer from firing this turn.
+   */
+  suppressDefaultSummarizer: boolean;
 }

@@ -9,13 +9,13 @@ export function HomePage() {
   const [currentView, setCurrentView] = createSignal<View>("home");
 
   return (
-    <Flex class="flex-1 grow gap-0 overflow-x-hidden min-h-0">
-      <HomeContext.Provider
-        value={{ currentView, setCurrentView, isSidebarOpen, setSidebarOpen }}
-      >
+    <HomeContext.Provider
+      value={{ currentView, setCurrentView, isSidebarOpen, setSidebarOpen }}
+    >
+      <Flex class="flex-1 grow gap-0 overflow-x-hidden min-h-0">
         <Sidebar />
         <Content />
-      </HomeContext.Provider>
-    </Flex>
+      </Flex>
+    </HomeContext.Provider>
   );
 }

@@ -1,29 +1,33 @@
 import { Flex, Text } from "@/app/components";
-import { PanelLabel } from "./PanelLabel";
+import { PanelLabel } from "../PanelLabel";
 import { For } from "solid-js";
 import { Themes } from "@/core/types";
 import { settingsStore } from "@/store";
-import { debouncedPatch } from "./Settings";
+import { debouncedPatch } from "../Settings";
 
 export function UiPanel() {
   return (
-    <Flex direction={"col"} class="gap-2">
+    <Flex direction={"col"} class="gap-2 w-full">
       <PanelLabel>UI Settings</PanelLabel>
       <Flex direction={"col"} class="px-4 gap-2">
         <div>
           <Text>Theme</Text>
-          <select class="select">
+          <select
+            class="select"
+            value={settingsStore.settings.UI.theme}
+            onChange={(e) => {
+              settingsStore.patch({
+                UI: {
+                  theme: e.currentTarget.value as "system" | "light" | "dark",
+                },
+              });
+            }}
+          >
             <For each={Themes}>
               {(theme) => (
                 <option
+                  value={theme}
                   selected={settingsStore.settings.UI.theme === theme}
-                  onClick={() => {
-                    settingsStore.patch({
-                      UI: {
-                        theme,
-                      },
-                    });
-                  }}
                 >
                   {theme}
                 </option>

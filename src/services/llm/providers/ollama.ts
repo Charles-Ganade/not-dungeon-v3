@@ -11,11 +11,15 @@ const ollama: LLMProvider = {
   async getModels(endpoint: string, _apiKey: string): Promise<string[]> {
     const url = `${endpoint.replace(/\/$/, "")}/api/tags`;
     if (!isValidUrl(url)) {
-      throw new LLMError(LLMErrorCode.ProviderUnavailable, "Invalid URL.")
+      throw new LLMError(LLMErrorCode.ProviderUnavailable, "Invalid URL.");
     }
     let res: Response;
     try {
-      res = await fetch(url);
+      res = await fetch(url, {
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+        }
+      });
     } catch (err) {
       throw new LLMError(LLMErrorCode.NetworkError, (err as Error).message);
     }
@@ -38,7 +42,10 @@ const ollama: LLMProvider = {
       res = await fetch(url, {
         method: "POST",
         signal,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
         body: JSON.stringify({
           model: request.model,
           messages: request.messages,
@@ -48,8 +55,8 @@ const ollama: LLMProvider = {
             top_p: request.params.topP,
             num_predict: request.params.maxOutputTokens,
             stop: request.params.stop.length > 0 ? request.params.stop : undefined,
-            // Note: frequency_penalty and presence_penalty have no Ollama equivalent
           },
+          think: request.params.thinkingEnabled
         }),
       });
     } catch (err) {
@@ -74,6 +81,8 @@ const ollama: LLMProvider = {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    
+    let isThinkingTagMode = false;
 
     try {
       while (true) {
@@ -96,15 +105,44 @@ const ollama: LLMProvider = {
               return;
             }
 
-            const delta = json.message?.content;
-            if (typeof delta === "string" && delta) {
-              yield { type: "text", delta };
+            const contentDelta = json.message?.content;
+            const thinkingDelta = json.message?.thinking;
+            if (typeof thinkingDelta === "string" && thinkingDelta) {
+              thinkingDelta;
+              yield { type: "thinking", delta: thinkingDelta };
+            }
+            if (typeof contentDelta === "string" && contentDelta) {
+              let remaining = contentDelta;
+              
+              while (remaining) {
+                if (isThinkingTagMode) {
+                  const endIndex = remaining.indexOf("</think>");
+                  if (endIndex !== -1) {
+                    const chunk = remaining.slice(0, endIndex);
+                    if (chunk) yield { type: "thinking", delta: chunk };
+                    isThinkingTagMode = false;
+                    remaining = remaining.slice(endIndex + 8);
+                  } else {
+                    yield { type: "thinking", delta: remaining };
+                    remaining = "";
+                  }
+                } else {
+                  const startIndex = remaining.indexOf("<think>");
+                  if (startIndex !== -1) {
+                    const chunk = remaining.slice(0, startIndex);
+                    if (chunk) yield { type: "text", delta: chunk };
+                    isThinkingTagMode = true;
+                    remaining = remaining.slice(startIndex + 7);
+                  } else {
+                    yield { type: "text", delta: remaining };
+                    remaining = "";
+                  }
+                }
+              }
             }
 
-            // json.done === true signals end of stream
             if (json.done) return;
           } catch {
-            // Malformed NDJSON line — skip silently
           }
         }
       }

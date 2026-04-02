@@ -1,10 +1,18 @@
-import { createEffect, on, type Component, type JSX } from "solid-js";
+import { createEffect, on, onMount, type Component, type JSX } from "solid-js";
 import Navbar from "./app/shared/Navbar";
 import { Toaster } from "solid-sonner";
 import { Portal } from "solid-js/web";
 import { settingsStore } from "./store";
+import { seedStarterScenarioIfNeeded } from "./services/db/scenarios";
 
 const Layout: Component = (props: { children?: JSX.Element }) => {
+  onMount(async () => {
+    try {
+      await seedStarterScenarioIfNeeded();
+    } catch (err) {
+      console.error("Failed to initialize starter scenario:", err);
+    }
+  });
   createEffect(
     on(
       () => ({

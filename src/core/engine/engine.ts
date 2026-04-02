@@ -1,10 +1,12 @@
 import { createSignal } from "solid-js";
 import { sessionStore, configStore } from "@/store/";
-import { stream as llmStream, createScriptStream } from "@/services/llm";
+import { stream as llmStream, createScriptStream, LLMChunk, LLMMessage } from "@/services/llm";
 import { buildDefaultContext } from "./context_builder";
-import { mergeScriptBundle, runScript, createHookContexts } from "./script_runner";
+import { mergeScriptBundle, runScript, createHookContexts, ScriptLogEntry, MemoryOperations, StoryCardOperations } from "./script_runner";
 import type { HistoryMessage, ThinkingBlock } from "@/core/types/stories";
 import type { ContextMessage } from "@/core/types/hooks";
+import { summarizeHistory } from "./summarizer";
+import { unwrap } from "solid-js/store";
 
 const [streamingText, setStreamingText] = createSignal("");
 const [streamingThinking, setStreamingThinking] = createSignal("");
@@ -33,6 +35,78 @@ function clearStreaming(): void {
   setStreamingThinking("");
 }
 
+const resolveMemoryOperations = (operations: MemoryOperations) => {
+  for (const memoryAdd of operations.add) {
+    sessionStore.enqueue({
+      type: "memory:add",
+      memory: {
+        ...memoryAdd,
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+        editedAt: Date.now(),
+      },
+    });
+  }
+  for (const memoryEdit of operations.edit) {
+    const {id, prev, next} = memoryEdit;
+    sessionStore.enqueue({
+      type: "memory:edit",
+      memoryId: id,
+      prev,
+      next
+    })
+  }
+  for (const memoryRemove of operations.delete) {
+    sessionStore.enqueue({
+      type: "memory:remove",
+      memory: memoryRemove
+    })
+  }
+}
+
+const resolveStoryOperations = (operations: StoryCardOperations) => {
+  for (const card of operations.add) {
+    sessionStore.enqueue({
+      type: "storyCard:add",
+      card: {
+        ...card,
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    });
+  }
+
+  for (const cardEdit of operations.edit) {
+    const {id, prev, next} = cardEdit;
+    sessionStore.enqueue({
+      type: "storyCard:edit",
+      cardId: id,
+      prev,
+      next
+    })
+  }
+
+  for (const cardDelete of operations.delete) {
+    sessionStore.enqueue({
+      type: "storyCard:remove",
+      card: cardDelete
+    })
+  }
+}
+
+/**
+ * Creates a fresh state snapshot from the current sessionStore.
+ * Used after each script phase to ensure the next phase sees mutations.
+ */
+function getCurrentStateSnapshot() {
+  const story = sessionStore.story;
+  return {
+    memories: Object.freeze([...sessionStore.activeMemories]),
+    storyCards: Object.freeze([...(story?.storyCards ?? [])]),
+  };
+}
+
 /**
  * Runs the full generation pipeline from a given parent message ID.
  * Used by both run() and retry().
@@ -42,7 +116,10 @@ function clearStreaming(): void {
  */
 async function generate(
   parentId: string | null,
-  userMsg: HistoryMessage | null
+  userMsg: HistoryMessage | null,
+  txDescription: string,
+  onLog?: (entry: ScriptLogEntry) => void,
+  onChunk?: (chunk: LLMChunk) => void
 ): Promise<void> {
   const story = sessionStore.story;
   const config = configStore.config;
@@ -54,13 +131,9 @@ async function generate(
   const { signal } = _abortController;
 
   sessionStore.setGenerating(true);
-  const txDescription = userMsg
-    ? `Turn: "${userMsg.text.slice(0, 50)}"`
-    : `Retry from message ${parentId}`;
   sessionStore.beginTransaction(txDescription);
 
   const scriptBundle = mergeScriptBundle(
-    // Resolve the scenario from the library store (already in memory)
     story.scenarioId
       ? (await import("@/store/library").then((m) =>
           m.libraryStore.scenarios.find((s) => s.id === story.scenarioId)
@@ -81,18 +154,25 @@ async function generate(
     signal
   );
 
-  const activePath = sessionStore.activePath;
-  const activeMemories = sessionStore.activeMemories;
+  let activePath = sessionStore.activePath;
+  let activeMemories = sessionStore.activeMemories;
+
+
+  const finalUserMsgId = userMsg ? crypto.randomUUID() : null;
+  const assistantMsgId = crypto.randomUUID();
 
   const hookCtxs = createHookContexts({
     inputText: userMsg?.text ?? "",
-    story,
+    story: unwrap(story),
     activePath,
     activeMemories,
     config,
     scriptStream,
-    essentials: story.essentials,   // ADD
-    scriptState: story.scriptState, // ADD
+    essentials: story.essentials,
+    scriptState: story.scriptState,
+    onLog,
+    userMsgId: finalUserMsgId,
+    assistantMsgId
   });
 
   try {
@@ -122,32 +202,37 @@ async function generate(
         });
       }
 
-      // Enqueue the (possibly mutated) user message
       const finalUserMsg = newMessage({
         ...userMsg,
         text: hookCtxs.input.input,
         parentId,
+        id: finalUserMsgId!
       });
       sessionStore.enqueue({ type: "message:add", message: finalUserMsg });
       parentId = finalUserMsg.id;
+
+      resolveMemoryOperations(hookCtxs.input.memoriesOperations);
     }
 
-    // Run default builder first, then let script mutate the result.
+    activePath = sessionStore.activePath;
+    activeMemories = sessionStore.activeMemories;
+
     const defaultCtx = buildDefaultContext({
-      activePath: sessionStore.activePath, // re-read: user msg was just added
+      activePath,
       activeMemories,
       storyCards: story.storyCards,
-      instructions: story.instructions,  // ADD
-      essentials: hookCtxs.input.essentials, // use post-onInput value
+      instructions: story.instructions,
+      essentials: hookCtxs.input.essentials,
       config,
     });
 
     const buildCtx = hookCtxs.buildContext(
+      getCurrentStateSnapshot(),
       defaultCtx.messages as ContextMessage[],
       defaultCtx.estimatedTokens,
       defaultCtx.activeStoryCards,
-      hookCtxs.input.essentials,   // pass post-onInput value
-      hookCtxs.input.scriptState,  // pass post-onInput value
+      hookCtxs.input.essentials,
+      hookCtxs.input.scriptState,
     );
 
     await runScript(scriptBundle.library, scriptBundle.buildContext, buildCtx as unknown as Record<string, unknown>);
@@ -173,6 +258,10 @@ async function generate(
       });
     }
 
+    resolveMemoryOperations(buildCtx.memoriesOperations);
+
+    const outputStateSnapshot = getCurrentStateSnapshot();
+
     let accText = "";
     let accThinking = "";
     const thinkingBlocks: ThinkingBlock[] = [];
@@ -185,39 +274,38 @@ async function generate(
       config.providerId,
       {
         model: config.model,
-        messages: buildCtx.messages as import("@/services/llm/types").LLMMessage[],
+        messages: buildCtx.messages as LLMMessage[],
         params: config.params,
       },
       config.endpoint,
       config.apiKey,
       signal
     )) {
+      onChunk?.(chunk)
       if (chunk.type === "text") {
         accText += chunk.delta;
         setStreamingText(accText);
       } else if (chunk.type === "thinking") {
         accThinking += chunk.delta;
         setStreamingThinking(accThinking);
-        // Each contiguous thinking stream is one block
         if (!currentThinkingId) currentThinkingId = crypto.randomUUID();
       } else if (chunk.type === "error") {
         clearStreaming();
         sessionStore.rollback();
-        // Re-throw so callers (or the UI) can surface the error
         throw new Error(`[${chunk.code}] ${chunk.message}`);
       }
     }
 
-    // Finalize thinking blocks
     if (accThinking && currentThinkingId) {
       thinkingBlocks.push({
         id: currentThinkingId,
-        messageId: "", // filled in below after we have the message id
+        messageId: "",
         content: accThinking,
       });
     }
 
     const outputCtx = hookCtxs.output(
+      outputStateSnapshot,
       accText, 
       accText, 
       buildCtx.essentials, 
@@ -247,9 +335,7 @@ async function generate(
       });
     }
 
-    const assistantMsgId = crypto.randomUUID();
 
-    // Fix up thinking block messageId references
     for (const block of thinkingBlocks) {
       block.messageId = assistantMsgId;
     }
@@ -264,23 +350,27 @@ async function generate(
 
     sessionStore.enqueue({ type: "message:add", message: assistantMsg });
 
-    // Enqueue any story cards added by the onOutput hook
-    for (const cardDef of hookCtxs.pendingStoryCards) {
-      sessionStore.enqueue({
-        type: "storyCard:add",
-        card: {
-          ...cardDef,
-          id: crypto.randomUUID(),
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      });
+    resolveMemoryOperations(outputCtx.memoriesOperations);
+    resolveStoryOperations(outputCtx.storyCardOperations);
+
+    if (!outputCtx.suppressDefaultSummarizer) {
+      const autoMemory = await summarizeHistory();
+      if (autoMemory) {
+        sessionStore.enqueue({
+          type: "memory:add",
+          memory: {
+            ...autoMemory,
+            id: crypto.randomUUID(),
+            createdAt: Date.now(),
+            editedAt: Date.now(),
+          },
+        });
+      }
     }
 
     sessionStore.commit();
   } catch (err) {
     clearStreaming();
-    // If not already rolled back (e.g. stream error path above already did it)
     if (sessionStore.session?.pendingTransactionId) {
       sessionStore.rollback();
     }
@@ -295,7 +385,7 @@ async function generate(
 /**
  * Runs a full turn: adds a user message then generates a response.
  */
-export async function run(input: string): Promise<void> {
+export async function run(input: string, onLog?: (entry: ScriptLogEntry) => void, onChunk?: (chunk: LLMChunk) => void): Promise<void> {
   const story = sessionStore.story;
   if (!story) return;
 
@@ -304,8 +394,7 @@ export async function run(input: string): Promise<void> {
     text: input,
     parentId: story.currentLeafId,
   });
-
-  await generate(story.currentLeafId, userMsg);
+  await generate(story.currentLeafId, userMsg,`Turn: "${userMsg.text.slice(0, 50)}"`, onLog, onChunk);
 }
 
 /**
@@ -315,12 +404,24 @@ export async function run(input: string): Promise<void> {
  * The current leaf stays in the tree; the new response becomes
  * the active branch (currentLeafId updates via message:add delta).
  */
-export async function retry(): Promise<void> {
+export async function retry(onLog?: (entry: ScriptLogEntry) => void, onChunk?: (entry: LLMChunk) => void): Promise<void> {
   const story = sessionStore.story;
   if (!story || !story.currentLeafId) return;
 
   const currentLeaf = story.messages.find((m) => m.id === story.currentLeafId);
   if (!currentLeaf) return;
 
-  await generate(currentLeaf.parentId, null);
+  sessionStore.switchBranch(currentLeaf.parentId!);
+
+  await generate(currentLeaf.parentId, null,`Retry from message ${currentLeaf.parentId}`, onLog, onChunk);
+}
+
+export async function continueStory(onLog?: (entry: ScriptLogEntry) => void, onChunk?: (chunk: LLMChunk) => void): Promise<void> {
+  const story = sessionStore.story;
+  if (!story || !story.currentLeafId) return;
+
+  const currentLeaf = story.messages.find((m) => m.id === story.currentLeafId);
+  if (!currentLeaf) return;
+
+  await generate(currentLeaf.id, null,`Continue from message ${currentLeaf.id}`, onLog, onChunk);
 }

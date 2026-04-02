@@ -1,6 +1,7 @@
 import { db } from "./schema";
 import type { Scenario } from "@/core/types/scenarios";
-import { deleteThumbnail, saveThumbnail } from "./thumbnails";
+import { deleteThumbnail, isThumbnailReferenced, saveThumbnail } from "./thumbnails";
+import { DEFAULT_SETTINGS, makeDefaultScenario } from "@/core/defaults";
 
 // ── Read ──────────────────────────────────────────────────────
 
@@ -50,20 +51,22 @@ export async function updateScenario(
   if (!existing) throw new Error(`Scenario ${id} not found`);
  
   const updates: Partial<Scenario> = { ...patch, updatedAt: Date.now() };
+  const oldThumbnailId = existing.thumbnailId;
  
   if (thumbnail) {
-    await Promise.all([
-      saveThumbnail(thumbnail), 
-      existing.thumbnailId 
-        ? deleteThumbnail(existing.thumbnailId) 
-        : null
-    ])
+    updates.thumbnailId = await saveThumbnail(thumbnail);
   } else if ("thumbnailId" in patch && (patch.thumbnailId === undefined || patch.thumbnailId === "")) {
-    if (existing.thumbnailId) await deleteThumbnail(existing.thumbnailId);
     updates.thumbnailId = undefined;
   }
  
   await db.scenarios.update(id, updates);
+  
+  if (oldThumbnailId && oldThumbnailId !== updates.thumbnailId) {
+    if (!(await isThumbnailReferenced(oldThumbnailId))) {
+      await deleteThumbnail(oldThumbnailId);
+    }
+  }
+
   const updated = await db.scenarios.get(id);
   if (!updated) throw new Error(`Scenario ${id} not found after update`);
   return updated;
@@ -77,6 +80,40 @@ export async function updateScenario(
  */
 export async function deleteScenario(id: string): Promise<void> {
   const scenario = await getScenario(id);
-  if (scenario?.thumbnailId) deleteThumbnail(scenario.thumbnailId)
+  if (!scenario) return;
   await db.scenarios.delete(id);
+  if (scenario.thumbnailId) {
+    if (!(await isThumbnailReferenced(scenario.thumbnailId))) {
+      await deleteThumbnail(scenario.thumbnailId);
+    }
+  }
+}
+
+export async function seedStarterScenarioIfNeeded() {
+  const count = await db.scenarios.count();
+  const isSet = localStorage.getItem("initialized")
+  if (count > 0 || isSet) return;
+
+  localStorage.setItem("initialized", "true");
+
+  const starterScenario = makeDefaultScenario({
+    tags: ["Dark Fantasy", "Showcase", "Scripted"],
+    authorNotes: "Maintain a dark fantasy tone. Emphasize atmospheric descriptions, creeping shadows, and a sense of ancient mystery.",
+    description: "A dark fantasy starter scenario that demonstrates the Story Arc Engine. As you play, the engine will autonomously call the AI in the background every 35 turns to plan out the next 11 major plot events, guiding the narrator.",
+    name: "The Obsidian Citadel (Powered by SAE)",
+    essentials:  `[World State]
+- Setting: The Obsidian Citadel, a vast, ruined fortress consumed by living, unnatural darkness.
+- Atmosphere: Tense, freezing cold, claustrophobic, and eerily quiet. 
+- Goal: The player must navigate the Citadel to find a mythical reality-altering artifact and escape. The main gates are permanently sealed behind them.
+- Inventory: The player holds the "Lumina Crystal". It emits a blue light that repels the darkness. Its light is finite and slowly dimming.
+- Threats: "Shadow Watchers" roam the unlit areas. They are blind, heat-draining entities that hunt purely by sound and sudden movement. They are repelled by the Lumina Crystal.`,
+    openingPrompt: `The iron-wrought gates of the Obsidian Citadel loom before you, \$\{What's your name?\}, piercing the storm clouds above. Legend claims an artifact of unimaginable power lies hidden in its depths, but the silence of the courtyard is unnatural. In your hand, the Lumina Crystal pulses with a faint, warm blue glow—the only thing keeping the unnaturally thick shadows at bay.
+
+    As you step across the threshold, the massive gates groan shut behind you, the sound echoing through the empty halls. The air instantly grows freezing cold. You must find the artifact and a way out before the crystal's light dies completely.
+
+    You stand in the grand entrance hall. Two heavy wooden doors lead to the East and West, and a ruined staircase spirals up into total darkness.`,
+  })
+
+  await db.scenarios.add(starterScenario);
+  console.log("Seeded starter scenario with fully integrated Story Arc Engine.");
 }

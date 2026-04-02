@@ -157,7 +157,7 @@ export function Modal(props: ModalProps) {
             role={rest.role ?? "dialog"}
             aria-modal="true"
             tabIndex={-1}
-            class="fixed inset-0 z-50 m-0 h-full w-full border-none bg-transparent p-0 [max-height:none] [max-width:none]"
+            class="fixed inset-0 z-50 m-0 h-full w-full border-none bg-transparent p-0 max-h-none max-w-none"
             onCancel={() => {
               if (rest.closeOnEsc) triggerClose();
             }}

@@ -5,10 +5,6 @@ import type { LLMProvider, LLMChunk, LLMMessage } from "../types";
 
 const ANTHROPIC_VERSION = "2023-06-01";
 
-/**
- * Anthropic separates the system prompt from the messages array.
- * Extract it here and pass the rest as the messages array.
- */
 function splitMessages(messages: LLMMessage[]): {
   system: string | undefined;
   messages: LLMMessage[];
@@ -26,16 +22,37 @@ const anthropic: LLMProvider = {
   label: "Anthropic (Claude)",
 
   async getModels(_endpoint: string, _apiKey: string): Promise<string[]> {
-  return [
-    "claude-opus-4-5",
-    "claude-sonnet-4-5",
-    "claude-haiku-4-5",
-  ];
-},
+    return [
+      "claude-3-7-sonnet-20250219", // Updated to 3.7 which natively supports thinking
+      "claude-3-5-sonnet-20241022",
+      "claude-3-5-haiku-20241022",
+    ];
+  },
 
   async *stream(request, endpoint, apiKey, signal): AsyncIterable<LLMChunk> {
     const url = `${endpoint.replace(/\/$/, "")}/messages`;
     const { system, messages } = splitMessages(request.messages);
+
+    // Build the payload dynamically to handle Anthropic's strict thinking constraints
+    const payload: any = {
+      model: request.model,
+      messages,
+      ...(system ? { system } : {}),
+      stop_sequences: request.params.stop.length > 0 ? request.params.stop : undefined,
+      stream: true,
+    };
+
+    if (request.params.thinkingEnabled) {
+      const budgetTokens = Math.max(1024, Math.floor(request.params.maxOutputTokens * 0.8));
+      const maxTokens = Math.max(request.params.maxOutputTokens, budgetTokens + 500);
+
+      payload.max_tokens = maxTokens;
+      payload.thinking = { type: "enabled", budget_tokens: budgetTokens };
+    } else {
+      payload.max_tokens = request.params.maxOutputTokens;
+      payload.temperature = request.params.temperature;
+      payload.top_p = request.params.topP;
+    }
 
     let res: Response;
     try {
@@ -47,19 +64,7 @@ const anthropic: LLMProvider = {
           "x-api-key": apiKey,
           "anthropic-version": ANTHROPIC_VERSION,
         },
-        body: JSON.stringify({
-          model: request.model,
-          messages,
-          ...(system ? { system } : {}),
-          max_tokens: request.params.maxOutputTokens,
-          temperature: request.params.temperature,
-          top_p: request.params.topP,
-          stop_sequences: request.params.stop.length > 0 ? request.params.stop : undefined,
-          stream: true,
-          ...(request.params.thinkingEnabled
-            ? { thinking: { type: "enabled", budget_tokens: Math.floor(request.params.maxOutputTokens * 0.8) } }
-            : {}),
-        }),
+        body: JSON.stringify(payload),
       });
     } catch (err) {
       if ((err as Error).name === "AbortError") {
@@ -83,7 +88,6 @@ const anthropic: LLMProvider = {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    // Anthropic SSE uses named events — track the current event type
     let currentEvent = "";
 
     try {
@@ -121,16 +125,13 @@ const anthropic: LLMProvider = {
                 break;
               }
               case "error": {
-                const err = json.error;
                 yield {
                   type: "error",
                   code: LLMErrorCode.ProviderError,
-                  message: err?.message ?? "Anthropic stream error",
+                  message: json.error?.message ?? "Anthropic stream error",
                 };
                 return;
               }
-              // message_start, content_block_start, content_block_stop,
-              // message_delta, message_stop — no action needed
             }
           } catch {
             // Malformed SSE line — skip silently

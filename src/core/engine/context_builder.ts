@@ -107,33 +107,66 @@ export function buildDefaultContext(
 
   const activeStoryCards = resolveActiveStoryCards(storyCards, activePath);
 
-  // ── System message ──────────────────────────────────────────
   const systemParts: string[] = [config.prompts.defaultSystemPrompt];
 
   if (instructions.trim()) {
-    systemParts.push(`Instructions:\n${instructions}`);
+    systemParts.push(`[Instructions]\n${instructions}`);
   }
  
   if (essentials.trim()) {
-    systemParts.push(`Essentials:\n${essentials}`);
+    systemParts.push(`[World State & Essentials]\n${essentials}`);
+  }
+
+  if (activeMemories.length > 0) {
+    const memoryContent = activeMemories.map((m) => m.content).join("\n\n");
+    systemParts.push(`[Active Memories]\n${memoryContent}`);
   }
 
   if (activeStoryCards.length > 0) {
     const cardBlock = activeStoryCards
-      .map((c) => `[${c.title}]\n${c.content}`)
+      .map((c) => `[${c.title}]\n[${c.tags.join(",")}]\n${c.content}`)
       .join("\n\n");
-    systemParts.push(`World information:\n${cardBlock}`);
+    systemParts.push(`[Relevant Story Cards]\n${cardBlock}`);
   }
 
-  if (config.authorNotes) {
-    systemParts.push(`[Author's notes: ${config.authorNotes}]`);
-  }
+  systemParts.push(`[Formatting Rules]\nCRITICAL: You are the narrator. You must describe the world and the consequences of the player's actions. Write in the second person ("You"). DO NOT write dialogue or actions for the player. Stop generating immediately after describing the environment's reaction.`);
 
-  const historyContent = buildHistoryString(activePath, activeMemories);
+  const memorizedIds = new Set(activeMemories.flatMap((m) => m.messageIds));
+  const unsummarized = activePath.filter((m) => !memorizedIds.has(m.id) && m.role !== "system");
+
+  const historyMessages: LLMMessage[] = unsummarized.map((m) => {
+    let text = m.text;
+    
+    if (m.role === "user") {
+      text = text.replace(/^>\s*/, "");
+    }
+    
+    return { role: m.role as "user" | "assistant", content: text };
+  });
+
+  const kickerParts: string[] = [];
+  if (config.authorNotes.trim()) {
+    kickerParts.push(`[System Note: ${config.authorNotes}]`);
+  }
+  kickerParts.push(`[System Note: Remember, you are the narrator. Describe the outcome of the player's action above, but DO NOT take any actions for them.]`);
+  
+  const kickerText = kickerParts.join("\n");
+
+  if (historyMessages.length > 0) {
+    const lastMsg = historyMessages[historyMessages.length - 1];
+    
+    if (lastMsg.role === "user") {
+      lastMsg.content += `\n\n---\n${kickerText}`;
+    } else {
+      historyMessages.push({ role: "user", content: kickerText });
+    }
+  } else {
+    historyMessages.push({ role: "user", content: `(The story begins.)\n\n---\n${kickerText}` });
+  }
 
   const messages: LLMMessage[] = [
     { role: "system", content: systemParts.join("\n\n") },
-    { role: "user", content: historyContent || "(The story begins.)" },
+    ...historyMessages,
   ];
 
   const estimatedTokens = messages.reduce(

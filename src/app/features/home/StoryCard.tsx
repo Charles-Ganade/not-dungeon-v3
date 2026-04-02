@@ -15,11 +15,12 @@ import { BsPencil } from "solid-icons/bs";
 import { getThumbnailUrl } from "@/services/db";
 import { DeleteStoryModal } from "./modals/DeleteStoryModal";
 import { EditStoryModal } from "./modals/EditStoryModal";
+import { A } from "@solidjs/router";
+import { DEFAULT_THUMBNAIL_URL } from "@/core/defaults";
 
 interface StoryCardProps {
   story: Story;
   scenario?: Scenario;
-  onPlay: () => void;
   class?: string;
 }
 
@@ -52,55 +53,22 @@ export function StoryCard(props: StoryCardProps) {
       />
       <div
         class={cn(
-          "card bg-base-100 border border-base-300 w-80 shrink-0 group",
+          "card bg-base-100 border border-base-300 w-64 lg:w-80 shrink-0",
           props.class,
         )}
       >
-        {/* aspect-video gives a 16:9 thumbnailId — proportional to card width,
-          no hardcoded heights needed */}
-        <figure class="aspect-video bg-base-200 relative overflow-hidden rounded-t-2xl">
-          <Show when={thumbUrl()}>
-            <img
-              src={thumbUrl()!}
-              alt={props.story.name}
-              class="w-full h-full object-cover"
-            />
-          </Show>
-          <div class="absolute inset-0 bg-base-300/80 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-            <button
-              class="btn btn-primary"
-              onClick={(e) => {
-                e.stopPropagation();
-                props.onPlay();
-              }}
-              title="Continue"
-            >
-              <FiPlay />
-            </button>
-            <button
-              class="btn btn-secondary btn-outline"
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenEditModal(true);
-              }}
-              title="Edit"
-            >
-              <BsPencil />
-            </button>
-            <button
-              class="btn btn-error btn-outline"
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenDeleteModal(true);
-              }}
-              title="Delete"
-            >
-              <FiTrash2 />
-            </button>
-          </div>
+        <figure class="aspect-video bg-base-200 relative overflow-hidden">
+          <img
+            src={thumbUrl() || DEFAULT_THUMBNAIL_URL}
+            alt={props.scenario?.name}
+            class="w-full h-full object-cover"
+            onError={(e) => {
+              e.currentTarget.src = DEFAULT_THUMBNAIL_URL;
+            }}
+          />
         </figure>
 
-        <div class="card-body p-4 gap-1">
+        <div class="card-body p-4 gap-1 flex flex-col">
           <Text variant="h5" truncate>
             {props.story.name}
           </Text>
@@ -110,18 +78,51 @@ export function StoryCard(props: StoryCardProps) {
               {props.story.description}
             </Text>
           </Show>
-
-          <div class="mt-auto pt-2 flex items-center gap-2">
-            <Show when={props.scenario}>
-              <span class="badge badge-ghost">
-                <Text variant="caption" color="subtle" truncate>
-                  {props.scenario!.name}
-                </Text>
-              </span>
-            </Show>
-            <Text variant="caption" color="subtle" class="ml-auto shrink-0">
-              {formatRelative(props.story.lastPlayedAt)}
-            </Text>
+          <div class="flex-1"></div>
+          <div class="mt-2 flex flex-col gap-3">
+            <div class="flex items-center gap-2">
+              <Show when={props.scenario}>
+                <span class="badge badge-ghost">
+                  <Text variant="caption" color="subtle" truncate>
+                    {props.scenario!.name}
+                  </Text>
+                </span>
+              </Show>
+              <Text variant="caption" color="subtle" class="ml-auto shrink-0">
+                {formatRelative(props.story.lastPlayedAt)}
+              </Text>
+            </div>
+            <div class="card-actions justify-end items-center mt-1">
+              <button
+                class="btn btn-ghost btn-sm btn-square text-error"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenDeleteModal(true);
+                }}
+                title="Delete"
+              >
+                <FiTrash2 />
+              </button>
+              <button
+                class="btn btn-ghost btn-sm btn-square text-base-content/70"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenEditModal(true);
+                }}
+                title="Edit"
+              >
+                <BsPencil />
+              </button>
+              <A
+                class="btn btn-primary btn-sm ml-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+                href={`/play/${props.story.id}`}
+              >
+                <FiPlay /> <Text variant={"bodySm"}>Continue</Text>
+              </A>
+            </div>
           </div>
         </div>
       </div>
