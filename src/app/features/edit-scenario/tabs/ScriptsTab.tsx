@@ -4,7 +4,6 @@ import {
   inputHookContext,
   outputHookContext,
 } from "@/core/types";
-import { TestButton } from "@/app/components/elements/testButton/TestButton";
 import { useEditScenario } from "../context";
 
 export function ScriptsTab() {

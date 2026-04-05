@@ -11,7 +11,7 @@ const openai: LLMProvider = {
   async getModels(endpoint: string, apiKey: string): Promise<string[]> {
     const url = `${endpoint.replace(/\/$/, "")}/models`;
     if (!isValidUrl(url)) {
-      throw new LLMError(LLMErrorCode.ProviderUnavailable, "Invalid URL.")
+      throw new LLMError(LLMErrorCode.ProviderUnavailable, "Invalid URL.");
     }
     let res: Response;
     try {
@@ -54,6 +54,9 @@ const openai: LLMProvider = {
           presence_penalty: request.params.presencePenalty,
           stop: request.params.stop.length > 0 ? request.params.stop : undefined,
           stream: true,
+          reasoning: {
+            effort: request.params.thinkingEnabled ? "high" : "none"
+          }
         }),
       });
     } catch (err) {
@@ -78,6 +81,9 @@ const openai: LLMProvider = {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    
+    // Tag parser state for DeepSeek models on compatible endpoints
+    let isThinkingTagMode = false;
 
     try {
       while (true) {
@@ -100,17 +106,42 @@ const openai: LLMProvider = {
             const delta = json.choices?.[0]?.delta;
             if (!delta) continue;
 
-            // Standard text content
-            if (typeof delta.content === "string" && delta.content) {
-              yield { type: "text", delta: delta.content };
-            }
-
-            // OpenAI reasoning_content (o-series models)
+            // NATIVE Reasoning (OpenAI o-series or native DeepSeek API)
             if (typeof delta.reasoning_content === "string" && delta.reasoning_content) {
               yield { type: "thinking", delta: delta.reasoning_content };
             }
+
+            // STANDARD Text (Apply fallback <think> parser)
+            if (typeof delta.content === "string" && delta.content) {
+              let remaining = delta.content;
+              while (remaining) {
+                if (isThinkingTagMode) {
+                  const endIndex = remaining.indexOf("</think>");
+                  if (endIndex !== -1) {
+                    const chunk = remaining.slice(0, endIndex);
+                    if (chunk) yield { type: "thinking", delta: chunk };
+                    isThinkingTagMode = false;
+                    remaining = remaining.slice(endIndex + 8);
+                  } else {
+                    yield { type: "thinking", delta: remaining };
+                    remaining = "";
+                  }
+                } else {
+                  const startIndex = remaining.indexOf("<think>");
+                  if (startIndex !== -1) {
+                    const chunk = remaining.slice(0, startIndex);
+                    if (chunk) yield { type: "text", delta: chunk };
+                    isThinkingTagMode = true;
+                    remaining = remaining.slice(startIndex + 7);
+                  } else {
+                    yield { type: "text", delta: remaining };
+                    remaining = "";
+                  }
+                }
+              }
+            }
           } catch {
-            // Malformed SSE line — skip silently
+            // Malformed SSE line
           }
         }
       }

@@ -5,7 +5,7 @@ import type { ScriptStream } from "@/services/llm/types";
  * Fields available to all three script files (input.js, buildContext.js, output.js).
  * Scripts access these as top-level properties on the `ctx` object.
  */
-interface BaseHookContext {
+export interface BaseHookContext {
   /**
    * Read-only snapshot of the story state at the start of the turn.
    * Reflects messages, memories, and story cards as they were when
@@ -16,6 +16,10 @@ interface BaseHookContext {
     readonly memories: readonly Memory[];
     readonly storyCards: readonly StoryCard[];
   };
+
+  readonly currentTurnIds: {
+    readonly user: string | null;
+  }
 
   /**
    * The story's essentials field. Mutable — assign a new string to
@@ -30,6 +34,25 @@ interface BaseHookContext {
    * changes are delta-tracked.
    */
   scriptState: string;
+
+  /**
+   * Adds a memory to the story. Enqueued as a delta.
+   * @param memory 
+   */
+  addMemory(memory: Omit<Memory, "id" | "editedAt" | "createdAt">): void
+
+  /**
+   * Edits a memory in the story. Enqueued as a delta.
+   * @param id id of the memory being edited
+   * @param content the new content of the string
+   */
+  editMemory(id: string, content: string | ((prev: string) => string)): void
+
+  /**
+   * Deletes a memory from the story. Enqueued as a delta.
+   * @param id id of the memory to delete
+   */
+  removeMemory(id: string): void
 
   /**
    * Persistent key-value store scoped to this story.
@@ -138,10 +161,38 @@ export interface OutputHookContext extends BaseHookContext {
   /** The original unmodified AI response. Read-only. */
   readonly rawOutput: string;
 
+  readonly currentTurnIds: {
+    readonly user: string | null;
+    readonly assistant: string;
+  }
+
   /**
    * Adds a story card to the story. The addition is enqueued as a
    * storyCard:add delta inside the current transaction, so it undoes
    * together with the AI response.
    */
   addStoryCard(card: Omit<StoryCard, "id" | "createdAt" | "updatedAt">): void;
+
+  /**
+   * Edits an existing story card.
+   * @param id id of the story card to edit
+   * @param card the new contents of the card
+   */
+  editStoryCard(
+    id: string, 
+    card: Omit<StoryCard, "id" | "createdAt" | "updatedAt"> | 
+    ((prev:Omit<StoryCard, "id" | "createdAt" | "updatedAt">) => 
+      Omit<StoryCard, "id" | "createdAt" | "updatedAt">)): void
+
+  /**
+   * Deletes an existing story card
+   * @param id id of the story card to remove
+   */
+  removeStoryCard(id: string): void;
+
+  /**
+   * If set to `true`, this stops the default 
+   * auto-summarizer from firing this turn.
+   */
+  suppressDefaultSummarizer: boolean;
 }

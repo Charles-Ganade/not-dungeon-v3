@@ -25,7 +25,7 @@ export function StoryCardsGrid(props: StoryCardsGridProps) {
         class={cn(
           "grid w-full gap-2",
           props.viewType === "grid"
-            ? "grid-cols-2 auto-rows-[16rem]"
+            ? "grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] auto-rows-[16rem]"
             : props.viewType === "stack"
               ? "auto-rows-[12rem]"
               : "auto-rows-[6rem]",

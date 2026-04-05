@@ -2,9 +2,11 @@ import { Flex, Modal, Text } from "@/app/components";
 import { makeDefaultStory } from "@/core/defaults";
 import { libraryStore } from "@/store";
 import { useNavigate } from "@solidjs/router";
-import { FiPlay, FiSave, FiX } from "solid-icons/fi";
+import { FiEdit, FiPlay, FiSave, FiX } from "solid-icons/fi";
 import { Accessor, createMemo, createSignal, Show } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
+// @ts-ignore
+import TextareaAutosize from "solid-textarea-autosize";
 
 interface CreateStoryModalProps {
   open: Accessor<boolean>;
@@ -89,13 +91,20 @@ export function CreateStoryModal(props: CreateStoryModalProps) {
           </button>
         </div>
         <div class="absolute inset-0 bg-base-300/80 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <input
-            type="file"
-            accept="image/*"
-            class="file-input file-input-primary w-fit"
-            onInput={handleFile}
+          <label
+            class="btn btn-lg btn-circle btn-primary"
             onClick={(e) => e.stopPropagation()}
-          />
+          >
+            <Text>
+              <FiEdit />
+            </Text>
+            <input
+              type="file"
+              class="hidden"
+              onInput={handleFile}
+              accept="image/*"
+            />
+          </label>
         </div>
       </figure>
       <Flex direction={"col"} class="p-6 flex-1 min-h-0">
@@ -133,9 +142,10 @@ export function CreateStoryModal(props: CreateStoryModalProps) {
             <Text weight={"semibold"} color={"muted"}>
               Description
             </Text>
-            <textarea
-              class="textarea w-full h-32 resize-none"
+            <TextareaAutosize
+              class="textarea h-32 w-full resize-none"
               value={story.description}
+              // @ts-ignore
               onInput={({ currentTarget }) => {
                 setStory("description", currentTarget.value);
               }}
@@ -145,9 +155,10 @@ export function CreateStoryModal(props: CreateStoryModalProps) {
             <Text weight={"semibold"} color={"muted"}>
               Opening Prompt
             </Text>
-            <textarea
-              class="textarea w-full h-64 resize-none"
+            <TextareaAutosize
+              class="textarea h-64 w-full resize-none"
               value={story.openingPrompt}
+              // @ts-ignore
               onInput={({ currentTarget }) => {
                 setStory("openingPrompt", currentTarget.value);
               }}
@@ -172,9 +183,10 @@ export function CreateStoryModal(props: CreateStoryModalProps) {
                 <Text weight={"semibold"} color={"muted"}>
                   Essentials
                 </Text>
-                <textarea
-                  class="textarea w-full h-48 resize-none"
+                <TextareaAutosize
+                  class="textarea h-48 w-full resize-none"
                   value={story.essentials}
+                  // @ts-ignore
                   onInput={({ currentTarget }) => {
                     setStory("essentials", currentTarget.value);
                   }}
@@ -184,9 +196,10 @@ export function CreateStoryModal(props: CreateStoryModalProps) {
                 <Text weight={"semibold"} color={"muted"}>
                   Author's Notes
                 </Text>
-                <textarea
-                  class="textarea w-full h-48 resize-none"
+                <TextareaAutosize
+                  class="textarea h-48 w-full resize-none"
                   value={story.authorNotes}
+                  // @ts-ignore
                   onInput={({ currentTarget }) => {
                     setStory("authorNotes", currentTarget.value);
                   }}

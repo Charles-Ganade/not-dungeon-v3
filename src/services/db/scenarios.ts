@@ -50,17 +50,22 @@ export async function updateScenario(
   if (!existing) throw new Error(`Scenario ${id} not found`);
  
   const updates: Partial<Scenario> = { ...patch, updatedAt: Date.now() };
+  const oldThumbnailId = existing.thumbnailId;
  
   if (thumbnail) {
-    const thumbnailId = await saveThumbnail(thumbnail);
-    if (existing.thumbnailId) await deleteThumbnail(existing.thumbnailId);
-    updates.thumbnailId = thumbnailId;
+    updates.thumbnailId = await saveThumbnail(thumbnail);
   } else if ("thumbnailId" in patch && (patch.thumbnailId === undefined || patch.thumbnailId === "")) {
-    if (existing.thumbnailId) await deleteThumbnail(existing.thumbnailId);
     updates.thumbnailId = undefined;
   }
  
   await db.scenarios.update(id, updates);
+  
+  if (oldThumbnailId && oldThumbnailId !== updates.thumbnailId) {
+    if (!(await isThumbnailReferenced(oldThumbnailId))) {
+      await deleteThumbnail(oldThumbnailId);
+    }
+  }
+
   const updated = await db.scenarios.get(id);
   if (!updated) throw new Error(`Scenario ${id} not found after update`);
   return updated;
@@ -74,8 +79,11 @@ export async function updateScenario(
  */
 export async function deleteScenario(id: string): Promise<void> {
   const scenario = await getScenario(id);
-  if (scenario?.thumbnailId && !(await isThumbnailReferenced(scenario.thumbnailId))) {
-    await deleteThumbnail(scenario.thumbnailId);
-  }
+  if (!scenario) return;
   await db.scenarios.delete(id);
+  if (scenario.thumbnailId) {
+    if (!(await isThumbnailReferenced(scenario.thumbnailId))) {
+      await deleteThumbnail(scenario.thumbnailId);
+    }
+  }
 }

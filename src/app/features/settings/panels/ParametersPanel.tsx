@@ -1,13 +1,15 @@
-import { Flex, Text } from "@/app/components";
-import { PanelLabel } from "./PanelLabel";
+import { Flex, Modal, Text } from "@/app/components";
+import { PanelLabel } from "../PanelLabel";
 import { settingsStore } from "@/store";
-import { debouncedPatch } from "./Settings";
+import { debouncedPatch } from "../Settings";
 import { AiOutlineInfoCircle } from "solid-icons/ai";
 import { DEFAULT_SETTINGS } from "@/core/defaults";
+import { createSignal } from "solid-js";
 
 export function ParametersPanel() {
+  const [confirmModalOpen, setConfirmModalOpen] = createSignal(false);
   return (
-    <Flex direction={"col"} class="gap-2">
+    <Flex direction={"col"} class="gap-2 w-full">
       <PanelLabel>Model Parameters</PanelLabel>
       <div class="grid grid-cols-2 gap-4 px-4">
         <div>
@@ -163,18 +165,42 @@ export function ParametersPanel() {
         <div class="col-span-2">
           <button
             class="btn btn-error w-full"
-            onClick={() => {
-              if (confirm("Are you sure about that?")) {
-                debouncedPatch({
-                  Parameters: DEFAULT_SETTINGS.Parameters,
-                });
-              }
-            }}
+            onClick={() => setConfirmModalOpen(true)}
           >
             <Text class="text-error-content">Reset to Default</Text>
           </button>
         </div>
       </div>
+      <Modal
+        class="p-0! grid bg-base-200 shadow"
+        open={confirmModalOpen()}
+        onClose={() => setConfirmModalOpen(false)}
+      >
+        <Flex direction={"col"} class="p-6 gap-4">
+          <Text variant={"h3"} weight={"bold"}>
+            Are you sure you want to reset the settings to default?
+          </Text>
+          <Flex class="p-2">
+            <button
+              class="btn btn-lg flex-1"
+              onClick={() => setConfirmModalOpen(false)}
+            >
+              <Text>Cancel</Text>
+            </button>
+            <button
+              class="btn btn-error flex-1"
+              onClick={() => {
+                debouncedPatch({
+                  Parameters: DEFAULT_SETTINGS.Parameters,
+                });
+                setConfirmModalOpen(false);
+              }}
+            >
+              <Text>Delete</Text>
+            </button>
+          </Flex>
+        </Flex>
+      </Modal>
     </Flex>
   );
 }

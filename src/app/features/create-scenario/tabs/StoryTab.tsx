@@ -1,6 +1,8 @@
 import { Text } from "@/app/components";
 import { FiInfo } from "solid-icons/fi";
 import { useCreateScenario } from "../context";
+// @ts-ignore
+import TextareaAutosize from "solid-textarea-autosize";
 
 export function StoryTab() {
   const { newScenario, setNewScenario } = useCreateScenario();
@@ -19,9 +21,10 @@ export function StoryTab() {
               <FiInfo />
             </Text>
           </div>
-          <textarea
+          <TextareaAutosize
             class="textarea w-full h-64 resize-none"
             value={newScenario.openingPrompt}
+            // @ts-ignore
             onInput={({ currentTarget }) => {
               setNewScenario("openingPrompt", currentTarget.value);
             }}
@@ -39,9 +42,10 @@ export function StoryTab() {
               <FiInfo />
             </Text>
           </div>
-          <textarea
+          <TextareaAutosize
             class="textarea w-full h-64 resize-none"
             value={newScenario.instructions}
+            // @ts-ignore
             onInput={({ currentTarget }) => {
               setNewScenario("instructions", currentTarget.value);
             }}
@@ -59,9 +63,10 @@ export function StoryTab() {
               <FiInfo />
             </Text>
           </div>
-          <textarea
+          <TextareaAutosize
             class="textarea w-full h-64 resize-none"
             value={newScenario.essentials}
+            // @ts-ignore
             onInput={({ currentTarget }) => {
               setNewScenario("essentials", currentTarget.value);
             }}
@@ -79,9 +84,10 @@ export function StoryTab() {
               <FiInfo />
             </Text>
           </div>
-          <textarea
+          <TextareaAutosize
             class="textarea w-full h-64 resize-none"
             value={newScenario.authorNotes}
+            // @ts-ignore
             onInput={({ currentTarget }) => {
               setNewScenario("authorNotes", currentTarget.value);
             }}

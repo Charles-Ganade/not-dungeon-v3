@@ -3,7 +3,7 @@ import { makeDefaultStory } from "@/core/defaults";
 import { Story } from "@/core/types";
 import { getThumbnailBlob } from "@/services/db";
 import { libraryStore } from "@/store";
-import { FiSave, FiX } from "solid-icons/fi";
+import { FiEdit, FiSave, FiX } from "solid-icons/fi";
 import {
   createEffect,
   createMemo,
@@ -13,6 +13,8 @@ import {
   Show,
 } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
+// @ts-ignore
+import TextareaAutosize from "solid-textarea-autosize";
 
 interface EditStoryModalProps {
   open: boolean;
@@ -117,19 +119,21 @@ export function EditStoryModal(props: EditStoryModalProps) {
           </button>
         </div>
         <div class="absolute inset-0 bg-base-300/80 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <input
-            type="file"
-            accept="image/*"
-            class="file-input file-input-primary w-fit"
-            onInput={handleFile}
+          <label
+            class="btn btn-lg btn-circle btn-primary"
             onClick={(e) => e.stopPropagation()}
-          />
+          >
+            <Text>
+              <FiEdit />
+            </Text>
+            <input type="file" class="hidden" onInput={handleFile} />
+          </label>
         </div>
       </figure>
       <Flex direction={"col"} class="p-6 flex-1 min-h-0">
         <Flex justify={"between"} align={"center"} class="h-fit">
           <Text variant={"h3"} weight={"bold"}>
-            Quick Start a Story
+            Edit Story: {story.name}
           </Text>
           <button
             class="btn btn-secondary"
@@ -154,6 +158,7 @@ export function EditStoryModal(props: EditStoryModalProps) {
                 onInput={({ currentTarget }) => {
                   setStory("name", currentTarget.value);
                 }}
+                accept="image/*"
               />
             </label>
           </div>
@@ -161,9 +166,10 @@ export function EditStoryModal(props: EditStoryModalProps) {
             <Text weight={"semibold"} color={"muted"}>
               Description
             </Text>
-            <textarea
+            <TextareaAutosize
               class="textarea w-full h-32 resize-none"
               value={story.description}
+              // @ts-ignore
               onInput={({ currentTarget }) => {
                 setStory("description", currentTarget.value);
               }}
@@ -174,9 +180,10 @@ export function EditStoryModal(props: EditStoryModalProps) {
               <Text weight={"semibold"} color={"muted"}>
                 Essentials
               </Text>
-              <textarea
+              <TextareaAutosize
                 class="textarea w-full h-48 resize-none"
                 value={story.essentials}
+                // @ts-ignore
                 onInput={({ currentTarget }) => {
                   setStory("essentials", currentTarget.value);
                 }}
@@ -186,9 +193,10 @@ export function EditStoryModal(props: EditStoryModalProps) {
               <Text weight={"semibold"} color={"muted"}>
                 Author's Notes
               </Text>
-              <textarea
+              <TextareaAutosize
                 class="textarea w-full h-48 resize-none"
                 value={story.authorNotes}
+                // @ts-ignore
                 onInput={({ currentTarget }) => {
                   setStory("authorNotes", currentTarget.value);
                 }}

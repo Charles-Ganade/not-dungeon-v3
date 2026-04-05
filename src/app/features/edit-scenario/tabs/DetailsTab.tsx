@@ -1,7 +1,9 @@
 import { Text } from "@/app/components";
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
-import { FiPlus, FiX } from "solid-icons/fi";
+import { createMemo, createSignal, For, Show } from "solid-js";
+import { FiEdit, FiX } from "solid-icons/fi";
 import { useEditScenario } from "../context";
+// @ts-ignore
+import TextareaAutosize from "solid-textarea-autosize";
 
 export function DetailsTab() {
   const { currentScenario, setCurrentScenario, thumbBlob, setThumbBlob } =
@@ -28,13 +30,20 @@ export function DetailsTab() {
           <img src={thumbUrl()!} class="w-full h-full object-cover" />
         </Show>
         <div class="absolute inset-0 bg-base-300/20 flex items-center justify-center gap-2">
-          <input
-            type="file"
-            accept="image/*"
-            class="file-input file-input-ghost w-fit"
-            onInput={handleFile}
+          <label
+            class="btn btn-lg btn-circle btn-primary"
             onClick={(e) => e.stopPropagation()}
-          />
+          >
+            <Text>
+              <FiEdit />
+            </Text>
+            <input
+              type="file"
+              class="hidden"
+              onInput={handleFile}
+              accept="image/*"
+            />
+          </label>
         </div>
       </figure>
 
@@ -57,9 +66,10 @@ export function DetailsTab() {
           <Text variant={"bodySm"} weight={"bold"}>
             Description
           </Text>
-          <textarea
+          <TextareaAutosize
             class="textarea w-full h-32 resize-none"
             value={currentScenario.description}
+            // @ts-ignore
             onInput={({ currentTarget }) => {
               setCurrentScenario("description", currentTarget.value);
             }}

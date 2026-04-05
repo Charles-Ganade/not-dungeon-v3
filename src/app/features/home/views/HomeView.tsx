@@ -25,7 +25,7 @@ export function HomeView() {
               .slice(0, 5)
               .sort((a, b) => a.lastPlayedAt - b.lastPlayedAt)}
           >
-            {(story) => <StoryCard story={story} onPlay={() => {}} />}
+            {(story) => <StoryCard story={story} />}
           </For>
         </Flex>
       </Flex>
@@ -46,6 +46,7 @@ export function HomeView() {
                     const newStory = await libraryStore.addStory(
                       makeStoryFromScenario(structuredClone(unwrap(scenario)), {
                         name: scenario.name,
+                        description: scenario.description,
                       }),
                     );
 
@@ -56,7 +57,7 @@ export function HomeView() {
                   }}
                 />
                 <For each={libraryStore.grouped().get(scenario.id)}>
-                  {(story) => <StoryCard story={story} onPlay={() => {}} />}
+                  {(story) => <StoryCard story={story} />}
                 </For>
               </Flex>
             </Flex>
@@ -69,7 +70,7 @@ export function HomeView() {
             </Flex>
             <Flex class="gap-4 overflow-x-auto min-w-0">
               <For each={libraryStore.grouped().get(undefined)}>
-                {(story) => <StoryCard story={story} onPlay={() => {}} />}
+                {(story) => <StoryCard story={story} />}
               </For>
             </Flex>
           </Flex>

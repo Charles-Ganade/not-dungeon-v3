@@ -11,7 +11,7 @@ const ollama: LLMProvider = {
   async getModels(endpoint: string, _apiKey: string): Promise<string[]> {
     const url = `${endpoint.replace(/\/$/, "")}/api/tags`;
     if (!isValidUrl(url)) {
-      throw new LLMError(LLMErrorCode.ProviderUnavailable, "Invalid URL.")
+      throw new LLMError(LLMErrorCode.ProviderUnavailable, "Invalid URL.");
     }
     let res: Response;
     try {
@@ -48,8 +48,8 @@ const ollama: LLMProvider = {
             top_p: request.params.topP,
             num_predict: request.params.maxOutputTokens,
             stop: request.params.stop.length > 0 ? request.params.stop : undefined,
-            // Note: frequency_penalty and presence_penalty have no Ollama equivalent
           },
+          think: request.params.thinkingEnabled
         }),
       });
     } catch (err) {
@@ -74,6 +74,9 @@ const ollama: LLMProvider = {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    
+    // Track whether we are currently inside a <think> block
+    let isThinkingTagMode = false;
 
     try {
       while (true) {
@@ -98,13 +101,39 @@ const ollama: LLMProvider = {
 
             const delta = json.message?.content;
             if (typeof delta === "string" && delta) {
-              yield { type: "text", delta };
+              
+              // On-the-fly parsing of <think> tags for DeepSeek-R1 models via Ollama
+              let remaining = delta;
+              while (remaining) {
+                if (isThinkingTagMode) {
+                  const endIndex = remaining.indexOf("</think>");
+                  if (endIndex !== -1) {
+                    const chunk = remaining.slice(0, endIndex);
+                    if (chunk) yield { type: "thinking", delta: chunk };
+                    isThinkingTagMode = false;
+                    remaining = remaining.slice(endIndex + 8);
+                  } else {
+                    yield { type: "thinking", delta: remaining };
+                    remaining = "";
+                  }
+                } else {
+                  const startIndex = remaining.indexOf("<think>");
+                  if (startIndex !== -1) {
+                    const chunk = remaining.slice(0, startIndex);
+                    if (chunk) yield { type: "text", delta: chunk };
+                    isThinkingTagMode = true;
+                    remaining = remaining.slice(startIndex + 7);
+                  } else {
+                    yield { type: "text", delta: remaining };
+                    remaining = "";
+                  }
+                }
+              }
             }
 
-            // json.done === true signals end of stream
             if (json.done) return;
           } catch {
-            // Malformed NDJSON line — skip silently
+            // Malformed NDJSON line
           }
         }
       }

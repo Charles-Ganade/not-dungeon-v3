@@ -85,6 +85,6 @@ export function makeStoryFromScenario(
     openingPrompt: scenario.openingPrompt,
     override: structuredClone(scenario.override),
     storyCards: structuredClone(scenario.storyCards),
-    scripts: {},
+    scripts: structuredClone(scenario.scripts)
   };
 }

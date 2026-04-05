@@ -1,11 +1,13 @@
 import { StoryCard } from "@/core/types";
 import { Modal, Text, useStoryCardsGrid } from "../components";
-import { createStore, unwrap } from "solid-js/store";
+import { createStore } from "solid-js/store";
 import { BsThreeDots } from "solid-icons/bs";
-import { FiEdit, FiCopy, FiDelete, FiSave, FiX } from "solid-icons/fi";
+import { FiCopy, FiDelete, FiSave, FiX } from "solid-icons/fi";
 import { makeDefaultStoryCard } from "@/core/defaults";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import { isEqual } from "lodash";
+// @ts-ignore
+import TextareaAutosize from "solid-textarea-autosize";
 
 interface EditStoryCardModalProps {
   open: boolean;
@@ -167,12 +169,14 @@ export function EditStoryCardModal(props: EditStoryCardModalProps) {
             <Text weight={"semibold"} color={"muted"} variant={"bodySm"}>
               Content
             </Text>
-            <textarea
+            <TextareaAutosize
               class="textarea w-full h-48 resize-none"
               value={card.content}
+              // @ts-ignore
               onInput={({ currentTarget }) => {
                 setCard("content", currentTarget.value);
               }}
+              maxRows={10}
             />
           </div>
           <div class="flex flex-col gap-1">
@@ -184,12 +188,14 @@ export function EditStoryCardModal(props: EditStoryCardModalProps) {
                 type="text"
                 value={triggers()}
                 onInput={(e) => setTriggers(e.currentTarget.value)}
+                placeholder="Comma separated triggers"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === ",") {
                     e.preventDefault();
-                    const value = triggers().trim();
+                    const value = triggers().trim().toLowerCase();
                     if (!value) return;
-                    setCard("triggers", (prev) => [...prev, value]);
+                    if (!card.triggers.includes(value))
+                      setCard("triggers", card.triggers.length, value);
                     setTriggers("");
                   }
                 }}
@@ -237,7 +243,8 @@ export function EditStoryCardModal(props: EditStoryCardModalProps) {
                       value = value.replace("#", "");
                     }
                     if (!value) return;
-                    setCard("tags", (prev) => [...prev, value]);
+                    if (!card.tags.includes(value))
+                      setCard("tags", card.tags.length, value);
                     setTags("");
                   }
                 }}

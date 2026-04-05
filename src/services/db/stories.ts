@@ -84,16 +84,21 @@ export async function updateStory(
   if (!existing) throw new Error(`Story ${id} not found`);
  
   const updates: Partial<Story> = { ...patch, updatedAt: Date.now() };
+  const oldThumbnailId = existing.thumbnailId;
  
   if (thumbnail) {
-    if (existing.thumbnailId) await deleteThumbnail(existing.thumbnailId);
     updates.thumbnailId = await saveThumbnail(thumbnail);
   } else if ("thumbnailId" in patch && patch.thumbnailId === undefined) {
-    if (existing.thumbnailId) await deleteThumbnail(existing.thumbnailId);
     updates.thumbnailId = undefined;
   }
  
   await db.stories.update(id, updates);
+  if (oldThumbnailId && oldThumbnailId !== updates.thumbnailId) {
+    if (!(await isThumbnailReferenced(oldThumbnailId))) {
+      await deleteThumbnail(oldThumbnailId);
+    }
+  }
+ 
   const updated = await db.stories.get(id);
   if (!updated) throw new Error(`Story ${id} not found after update`);
   return updated;
@@ -105,8 +110,11 @@ export async function updateStory(
  */
 export async function deleteStory(id: string): Promise<void> {
   const story = await getStory(id);
-  if (story?.thumbnailId && !(await isThumbnailReferenced(story.thumbnailId))) {
-    await deleteThumbnail(story.thumbnailId);
-  }
+  if (!story) return;
   await db.stories.delete(id);
+  if (story.thumbnailId) {
+    if (!(await isThumbnailReferenced(story.thumbnailId))) {
+      await deleteThumbnail(story.thumbnailId);
+    }
+  }
 }

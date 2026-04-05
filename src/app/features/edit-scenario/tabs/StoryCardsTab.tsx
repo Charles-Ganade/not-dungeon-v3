@@ -1,10 +1,13 @@
 import { StoryCardsGrid, Text } from "@/app/components";
 import { cn } from "@/utils";
 import { BsViewStacked } from "solid-icons/bs";
-import { FiGrid, FiList, FiSearch } from "solid-icons/fi";
+import { FiDownload, FiGrid, FiList, FiSearch, FiUpload } from "solid-icons/fi";
 import { createMemo, createSignal } from "solid-js";
 import { makeDefaultStoryCard } from "@/core/defaults";
 import { useEditScenario } from "../context";
+import { importStoryCards, exportStoryCards } from "@/core/utils/storyCardIO";
+import { unwrap } from "solid-js/store";
+import { toast } from "solid-sonner";
 
 export function StoryCardsTab() {
   const { currentScenario, setCurrentScenario } = useEditScenario();
@@ -29,9 +32,35 @@ export function StoryCardsTab() {
 
     return filtered.sort((a, b) => b.updatedAt - a.updatedAt);
   });
+
+  const handleImport = (e: Event) => {
+    const file = (e.currentTarget as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const cards = importStoryCards(reader.result as string);
+        setCurrentScenario("storyCards", (c) => [...c, ...cards]);
+      } catch (err) {
+        toast.error((err as Error).message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExport = () => {
+    const file = exportStoryCards(unwrap(currentScenario.storyCards));
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = file.name;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div class="tab-content bg-base-200 p-6">
-      <div class="flex flex-col gap-4 px-8">
+    <div class="tab-content bg-base-200 p-2 lg:p-6">
+      <div class="flex flex-col gap-4 px-2 lg:px-8">
         <div class="flex gap-2 h-fit">
           <label class="input flex-1">
             <FiSearch />
@@ -114,6 +143,26 @@ export function StoryCardsTab() {
             );
           }}
         />
+        <div class="flex gap-2 justify-end mt-2">
+          <label class="btn btn-soft btn-error">
+            <Text>
+              <FiDownload />
+            </Text>
+            <Text class="uppercase">Import</Text>
+            <input
+              type="file"
+              class="hidden"
+              accept=".json"
+              onInput={handleImport}
+            />
+          </label>
+          <button class="btn btn-soft" onClick={handleExport}>
+            <Text>
+              <FiUpload />
+            </Text>
+            <Text class="uppercase">Export</Text>
+          </button>
+        </div>
       </div>
     </div>
   );
