@@ -390,6 +390,20 @@ export function editStoryMetadata(updates: Partial<Pick<Story, "name" | "descrip
   scheduleSave();
 }
 
+export function editKvMemory(data: Record<string, unknown>) {
+  const kv = sessionStore.story?.kvMemory;
+  if (!kv) return;
+
+  const hasChanges = Object.entries(data).some(
+    ([key, value]) => kv[key as keyof typeof data] !== value
+  );
+
+  if (!hasChanges) return;
+
+  setState("story", "kvMemory", data);
+  scheduleSave();
+}
+
 /**
  * Updates the active story's thumbnail.
  * Saves the new blob to the database to generate an ID, updates the session state,
@@ -528,5 +542,5 @@ export const sessionStore = {
   undo, redo, switchBranch, eraseLastMessage, editMessage,
   editEssentials, editScriptState, editStoryMetadata, editScripts, editThumbnail,
   addStoryCard, editStoryCard, removeStoryCard,
-  editMemory
+  editMemory, editKvMemory
 };

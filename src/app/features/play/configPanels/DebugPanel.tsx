@@ -1,13 +1,22 @@
 import { Text } from "@/app/components";
 import { usePlay } from "../context";
-import { createMemo, createSignal, For } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import { sessionStore } from "@/store";
 import { unwrap } from "solid-js/store";
 // @ts-ignore
 import TextareaAutosize from "solid-textarea-autosize";
 import { debounce } from "lodash";
+import { toast } from "solid-sonner"; // For alerting on invalid JSON
 
-const debouncedFn = debounce(sessionStore.editScriptState, 1000);
+const debouncedScriptFn = debounce(sessionStore.editScriptState, 1000);
+
+const debouncedKvFn = debounce((parsedData: Record<string, unknown>) => {
+  if (sessionStore.editKvMemory) {
+    sessionStore.editKvMemory(parsedData);
+  } else {
+    console.warn("sessionStore.editKvMemory is not implemented!");
+  }
+}, 1000);
 
 const formatDebugArg = (arg: unknown): string => {
   if (arg === undefined) return "undefined";
@@ -48,9 +57,23 @@ const formatDebugArg = (arg: unknown): string => {
 
 export function DebugPanel() {
   const { debugLogs, setDebugLogs } = usePlay();
+
   const [isScriptStateEditable, setScriptStateEditable] = createSignal(false);
+  const [isKvMemoryEditable, setKvMemoryEditable] = createSignal(false);
+
   const kvMemory = createMemo(() => unwrap(sessionStore.story?.kvMemory));
   const scriptState = createMemo(() => unwrap(sessionStore.story?.scriptState));
+
+  // Helper to get a clean JSON string of kvMemory for the editor
+  const kvMemoryString = createMemo(() => {
+    const mem = kvMemory();
+    if (!mem) return "{}";
+    try {
+      return JSON.stringify(mem, null, 2);
+    } catch {
+      return "{}";
+    }
+  });
 
   return (
     <div class="flex flex-1 flex-col gap-2 p-4 min-h-0">
@@ -144,17 +167,56 @@ export function DebugPanel() {
         </label>
         <div class="tab-content bg-base-100 border-base-300 border-t-0 relative">
           <div class="absolute inset-0 overflow-y-auto p-4">
-            <div class="w-full h-full flex flex-col gap-4">
+            <div class="w-full h-full flex flex-col gap-6">
+              {/* KV Memory Section */}
               <div class="flex flex-col gap-2">
-                <Text variant={"overline"} color={"muted"} weight={"bold"}>
-                  Key-Value Memory
-                </Text>
-                <Text class="font-mono">
-                  <code class="block bg-base-100 rounded px-2 py-1 mt-1 border border-base-content/10 whitespace-pre-wrap">
-                    {formatDebugArg(kvMemory())}
-                  </code>
-                </Text>
+                <div class="flex items-center justify-between">
+                  <Text variant={"overline"} color={"muted"} weight={"bold"}>
+                    Key-Value Memory
+                  </Text>
+                  <div class="flex gap-2 items-center">
+                    <Text variant={"bodySm"} color={"muted"} weight={"bold"}>
+                      Enable Editing?
+                    </Text>
+                    <input
+                      type="checkbox"
+                      class="checkbox checked:checkbox-accent"
+                      checked={isKvMemoryEditable()}
+                      onChange={() => setKvMemoryEditable((v) => !v)}
+                    />
+                  </div>
+                </div>
+
+                <Show
+                  when={isKvMemoryEditable()}
+                  fallback={
+                    <Text class="font-mono">
+                      <code class="block bg-base-100 rounded px-2 py-1 mt-1 border border-base-content/10 whitespace-pre-wrap">
+                        {formatDebugArg(kvMemory())}
+                      </code>
+                    </Text>
+                  }
+                >
+                  <Text class="font-mono" color="inherit">
+                    <TextareaAutosize
+                      value={kvMemoryString()}
+                      // @ts-ignore
+                      onChange={({ currentTarget }) => {
+                        try {
+                          const parsed = JSON.parse(currentTarget.value);
+                          debouncedKvFn(parsed);
+                        } catch (e) {
+                          toast.error("Invalid JSON in KV Memory!");
+                        }
+                      }}
+                      class="textarea resize-none w-full block bg-base-100 rounded px-2 py-1 mt-1 border border-base-content/10 whitespace-pre-wrap"
+                      minRows={3}
+                    />
+                  </Text>
+                </Show>
               </div>
+
+              {/* Script State Section */}
               <div class="flex flex-col gap-2">
                 <div class="flex items-center justify-between">
                   <Text variant={"overline"} color={"muted"} weight={"bold"}>
@@ -181,7 +243,7 @@ export function DebugPanel() {
                     disabled={!isScriptStateEditable()}
                     // @ts-ignore
                     onChange={({ currentTarget }) =>
-                      debouncedFn(currentTarget.value)
+                      debouncedScriptFn(currentTarget.value)
                     }
                     class="textarea resize-none w-full block bg-base-100 disabled:bg-base-200 rounded px-2 py-1 mt-1 border border-base-content/10 whitespace-pre-wrap"
                     minRows={3}
