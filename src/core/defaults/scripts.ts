@@ -32,7 +32,8 @@ export const DEFAULT_SCRIPT_INPUT = `\
 //   ctx.removeMemory()      — delete a memory delta
 //   ctx.ai.stream()         — run a secondary AI call
 //   ctx.inject(text)        — inject a system message into the next request
-//   ctx.stop(reason?)       — cancel the turn entirely
+//   ctx.stop(reason?)       — stop the turn early and commit all prior changes
+//   ctx.cancel(reason?)     — cancel the turn entirely
 //   ctx.console             — logger object, visible in the debug panel
 
 // your code here
@@ -59,7 +60,8 @@ export const DEFAULT_SCRIPT_BUILD_CONTEXT = `\
 //   ctx.editMemory()        — edit an existing memory delta
 //   ctx.removeMemory()      — delete a memory delta
 //   ctx.ai.stream()         — run a secondary AI call
-//   ctx.stop(reason?)       — cancel the turn entirely
+//   ctx.stop(reason?)       — stop the turn early and commit all prior changes
+//   ctx.cancel(reason?)     — cancel the turn entirely
 //   ctx.console             — logger object, visible in the debug panel
 
 // your code here
@@ -89,7 +91,8 @@ export const DEFAULT_SCRIPT_OUTPUT = `\
 //   ctx.editStoryCard()           — edit an existing story card delta
 //   ctx.removeStoryCard()         — delete a story card delta
 //   ctx.ai.stream()               — run a secondary AI call
-//   ctx.stop(reason?)             — cancel the turn (output is discarded)
+//   ctx.stop(reason?)       — stop the turn early and commit all prior changes
+//   ctx.cancel(reason?)     — cancel the turn entirely
 //   ctx.console                   — logger object, visible in the debug panel
 
 // your code here

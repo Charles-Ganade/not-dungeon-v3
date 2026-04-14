@@ -91,6 +91,7 @@ export async function runScript(
     warn: (...args) => ctx.console?.warn(...args),
     error: (...args) => ctx.console?.error(...args),
     stop: (reason) => ctx.stop?.(reason),
+    cancel: (reason) => ctx.cancel?.(reason),
     startStream: async (input) => {
       const id = crypto.randomUUID();
       const iterable = ctx.ai.stream(input);
@@ -152,10 +153,10 @@ export async function runScript(
   }
 }
 
-interface StopFlag { stopped: boolean; reason: string }
+interface StopFlag { stopped: boolean; canceled: boolean; reason: string }
 
 function makeStopFlag(): StopFlag {
-  return { stopped: false, reason: "" };
+  return { stopped: false, canceled: false, reason: "" };
 }
 
 export type ScriptLogEntry = { level: "log" | "warn" | "error"; args: unknown[] };
@@ -306,6 +307,7 @@ export function createHookContexts(params: {
     config: Object.freeze(config),
     console: logger,
     stop: (reason = "") => { stopFlag.stopped = true; stopFlag.reason = reason; },
+    cancel: (reason = "") => { stopFlag.canceled = true; stopFlag.reason = reason; },
     ai: { stream: scriptStream },  
     essentials: params.essentials,
     scriptState: params.scriptState,

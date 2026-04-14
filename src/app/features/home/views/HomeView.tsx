@@ -1,5 +1,5 @@
 import { Flex, Text } from "@/app/components";
-import { For, Show } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
 import { ScenarioCard } from "../ScenarioCard";
 import { StoryCard } from "../StoryCard";
 import { libraryStore } from "@/store";
@@ -9,8 +9,7 @@ import { makeStoryFromScenario } from "@/core/defaults";
 import { unwrap } from "solid-js/store";
 
 export function HomeView() {
-  const scenarios = () => libraryStore.scenarios;
-  const stories = () => libraryStore.stories;
+  const scenarios = createMemo(() => libraryStore.scenarios);
   const navigator = useNavigate();
 
   return (
@@ -21,9 +20,10 @@ export function HomeView() {
         </Text>
         <Flex class="gap-4 overflow-x-auto min-w-0">
           <For
-            each={stories()
-              .slice(0, 5)
-              .sort((a, b) => a.lastPlayedAt - b.lastPlayedAt)}
+            each={libraryStore.items
+              .filter((v) => v.kind === "story")
+              .map((v) => v.data)
+              .slice(0, 5)}
           >
             {(story) => <StoryCard story={story} />}
           </For>

@@ -95,6 +95,12 @@ export interface BaseHookContext {
    * appended to history. The pending transaction is discarded.
    */
   stop(reason?: string): void;
+
+  /**
+   * Halts the current turn immediately and discards the pending transaction.
+   * No further scripts run, no API call is made, and no message is appended to history.
+   */
+  cancel(reason?: string): void;
 }
 
 /**

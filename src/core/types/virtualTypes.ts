@@ -91,6 +91,7 @@ interface BaseHookContext {
     error: (...args: unknown[]) => void;
   };
   stop(reason?: string): void;
+  cancel(reason?: string): void;
 }` as HookContext;
 
 export const inputHookContext = `${baseContext}

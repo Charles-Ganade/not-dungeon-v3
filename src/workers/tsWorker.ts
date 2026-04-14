@@ -7,6 +7,11 @@ import ts from "typescript";
 import * as Comlink from "comlink";
 import { createWorker } from "@valtown/codemirror-ts/worker";
 
+const IGNORED_DIAGNOSTICS = [
+  1375,
+  1378,
+];
+
 const compilerOptions: ts.CompilerOptions = {
   target: ts.ScriptTarget.ES2022,
   lib: [
@@ -27,6 +32,20 @@ Comlink.expose(
       ts,
     );
     const system = createSystem(fsMap);
-    return createVirtualTypeScriptEnvironment(system, [], ts, compilerOptions);
+    const env = createVirtualTypeScriptEnvironment(system, [], ts, compilerOptions);
+
+    const originalGetSemanticDiagnostics = env.languageService.getSemanticDiagnostics;
+    env.languageService.getSemanticDiagnostics = (fileName) => {
+      const diagnostics = originalGetSemanticDiagnostics(fileName);
+      return diagnostics.filter((d) => !IGNORED_DIAGNOSTICS.includes(d.code));
+    };
+
+    const originalGetSyntacticDiagnostics = env.languageService.getSyntacticDiagnostics;
+    env.languageService.getSyntacticDiagnostics = (fileName) => {
+      const diagnostics = originalGetSyntacticDiagnostics(fileName);
+      return diagnostics.filter((d) => !IGNORED_DIAGNOSTICS.includes(d.code));
+    };
+
+    return env;
   }),
 );

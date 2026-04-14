@@ -181,7 +181,7 @@ async function generate(
       const prevScriptState = story.scriptState;
       await runScript(scriptBundle.library, scriptBundle.input, hookCtxs.input as unknown as Record<string, unknown>);
 
-      if (hookCtxs.stopFlag.stopped) {
+      if (hookCtxs.stopFlag.canceled) {
         sessionStore.rollback();
         return;
       }
@@ -212,6 +212,11 @@ async function generate(
       parentId = finalUserMsg.id;
 
       resolveMemoryOperations(hookCtxs.input.memoriesOperations);
+
+      if (hookCtxs.stopFlag.stopped) {
+        sessionStore.commit();
+        return;
+      }
     }
 
     activePath = sessionStore.activePath;
@@ -237,7 +242,7 @@ async function generate(
 
     await runScript(scriptBundle.library, scriptBundle.buildContext, buildCtx as unknown as Record<string, unknown>);
 
-    if (hookCtxs.stopFlag.stopped) {
+    if (hookCtxs.stopFlag.canceled) {
       sessionStore.rollback();
       return;
     }
@@ -259,6 +264,11 @@ async function generate(
     }
 
     resolveMemoryOperations(buildCtx.memoriesOperations);
+
+    if (hookCtxs.stopFlag.stopped) {
+      sessionStore.commit();
+      return;
+    }
 
     const outputStateSnapshot = getCurrentStateSnapshot();
 
@@ -313,7 +323,7 @@ async function generate(
     );
     await runScript(scriptBundle.library, scriptBundle.output, outputCtx as unknown as Record<string, unknown>);
 
-    if (hookCtxs.stopFlag.stopped) {
+    if (hookCtxs.stopFlag.canceled) {
       clearStreaming();
       sessionStore.rollback();
       return;
@@ -352,6 +362,11 @@ async function generate(
 
     resolveMemoryOperations(outputCtx.memoriesOperations);
     resolveStoryOperations(outputCtx.storyCardOperations);
+
+    if (hookCtxs.stopFlag.stopped) {
+      sessionStore.commit();
+      return;
+    }
 
     if (!outputCtx.suppressDefaultSummarizer) {
       const autoMemory = await summarizeHistory();

@@ -5,6 +5,7 @@ export interface SandboxCallbacks {
   warn: (...args: any[]) => void;
   error: (...args: any[]) => void;
   stop: (reason?: string) => void;
+  cancel: (reason?: string) => void;
   startStream: (input: any) => Promise<string>;
   streamNext: (id: string) => Promise<any>;
 }
@@ -62,6 +63,7 @@ const runnerApi = {
         if (prevCard) storyCardOperations.delete.push(prevCard);
       },
       stop: (reason?: string) => callbacks.stop(reason),
+      cancel: (reason?: string) => callbacks.cancel(reason),
       kvMemory: {
         get: (k: string) => ctxData.kvMemoryData[k],
         set: (k: string, v: any) => { ctxData.kvMemoryData[k] = v; },
