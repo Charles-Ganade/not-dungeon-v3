@@ -17,7 +17,7 @@ import { streamingText, streamingThinking } from "@/core/engine/engine";
 
 export function HistoryView() {
   return (
-    <div class="w-full max-w-3xl h-fit flex flex-col pb-40 md:pb-50">
+    <div class="w-full max-w-3xl h-fit flex flex-col">
       <For each={sessionStore.activePath}>
         {(item) => <HistoryEntry message={item} />}
       </For>
@@ -114,6 +114,26 @@ function HistoryEntry(props: {
         if (editing()) cancel();
       }}
     >
+      <Show when={props.message.steeringNotes?.length}>
+        <div
+          class={cn("collapse", props.openThoughts && "collapse-open")}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input id={`collapse-notes-${id}`} type="checkbox" class="peer" />
+          <label
+            for={`collapse-notes-${id}`}
+            class="fixed inset-0 hidden peer-checked:block"
+          ></label>
+          <div class="collapse-title font-semibold p-0 h-fit">
+            <Text variant={"overline"} color={"subtle"}>
+              User Notes
+            </Text>
+          </div>
+          <div class="collapse-content text-sm z-1">
+            {props.message.steeringNotes}
+          </div>
+        </div>
+      </Show>
       <Show when={props.message.thinkingBlocks.length > 0}>
         <div
           class={cn("collapse", props.openThoughts && "collapse-open")}
@@ -179,7 +199,7 @@ function HistoryEntry(props: {
       <Show when={!editing()}>
         <Text
           class={cn(
-            "prose flex-1 min-w-full",
+            "prose flex-1 min-w-full flex flex-col gap-4  ",
             props.message.role === "user" ? "text-primary" : "text-inherit",
           )}
           variant={"h5"}

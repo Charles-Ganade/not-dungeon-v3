@@ -1,8 +1,20 @@
 import { createSignal } from "solid-js";
 import { sessionStore, configStore } from "@/store/";
-import { stream as llmStream, createScriptStream, LLMChunk, LLMMessage } from "@/services/llm";
+import {
+  stream as llmStream,
+  createScriptStream,
+  LLMChunk,
+  LLMMessage,
+} from "@/services/llm";
 import { buildDefaultContext } from "./context_builder";
-import { mergeScriptBundle, runScript, createHookContexts, ScriptLogEntry, MemoryOperations, StoryCardOperations } from "./script_runner";
+import {
+  mergeScriptBundle,
+  runScript,
+  createHookContexts,
+  ScriptLogEntry,
+  MemoryOperations,
+  StoryCardOperations,
+} from "./script_runner";
 import type { HistoryMessage, ThinkingBlock } from "@/core/types/stories";
 import type { ContextMessage } from "@/core/types/hooks";
 import { summarizeHistory } from "./summarizer";
@@ -20,7 +32,8 @@ export function cancel(): void {
 }
 
 function newMessage(
-  overrides: Partial<HistoryMessage> & Pick<HistoryMessage, "role" | "text" | "parentId">
+  overrides: Partial<HistoryMessage> &
+    Pick<HistoryMessage, "role" | "text" | "parentId">,
 ): HistoryMessage {
   return {
     id: crypto.randomUUID(),
@@ -48,21 +61,21 @@ const resolveMemoryOperations = (operations: MemoryOperations) => {
     });
   }
   for (const memoryEdit of operations.edit) {
-    const {id, prev, next} = memoryEdit;
+    const { id, prev, next } = memoryEdit;
     sessionStore.enqueue({
       type: "memory:edit",
       memoryId: id,
       prev,
-      next
-    })
+      next,
+    });
   }
   for (const memoryRemove of operations.delete) {
     sessionStore.enqueue({
       type: "memory:remove",
-      memory: memoryRemove
-    })
+      memory: memoryRemove,
+    });
   }
-}
+};
 
 const resolveStoryOperations = (operations: StoryCardOperations) => {
   for (const card of operations.add) {
@@ -78,22 +91,22 @@ const resolveStoryOperations = (operations: StoryCardOperations) => {
   }
 
   for (const cardEdit of operations.edit) {
-    const {id, prev, next} = cardEdit;
+    const { id, prev, next } = cardEdit;
     sessionStore.enqueue({
       type: "storyCard:edit",
       cardId: id,
       prev,
-      next
-    })
+      next,
+    });
   }
 
   for (const cardDelete of operations.delete) {
     sessionStore.enqueue({
       type: "storyCard:remove",
-      card: cardDelete
-    })
+      card: cardDelete,
+    });
   }
-}
+};
 
 /**
  * Creates a fresh state snapshot from the current sessionStore.
@@ -114,13 +127,16 @@ function getCurrentStateSnapshot() {
  * @param parentId  The message the new assistant response hangs off.
  * @param userMsg   The user message to enqueue first (null for retry).
  */
-async function generate(
-  parentId: string | null,
-  userMsg: HistoryMessage | null,
-  txDescription: string,
-  onLog?: (entry: ScriptLogEntry) => void,
-  onChunk?: (chunk: LLMChunk) => void
-): Promise<void> {
+async function generate(options: {
+  parentId: string | null;
+  userMsg: HistoryMessage | null;
+  notes?: string;
+  txDescription: string;
+  onLog?: (entry: ScriptLogEntry) => void;
+  onChunk?: (chunk: LLMChunk) => void;
+}): Promise<void> {
+  let parentId = options.parentId;
+  const { userMsg, notes, txDescription, onLog, onChunk } = options;
   const story = sessionStore.story;
   const config = configStore.config;
 
@@ -135,11 +151,11 @@ async function generate(
 
   const scriptBundle = mergeScriptBundle(
     story.scenarioId
-      ? (await import("@/store/library").then((m) =>
-          m.libraryStore.scenarios.find((s) => s.id === story.scenarioId)
-        ))
+      ? await import("@/store/library").then((m) =>
+          m.libraryStore.scenarios.find((s) => s.id === story.scenarioId),
+        )
       : undefined,
-    story
+    story,
   );
 
   const scriptStream = createScriptStream(
@@ -151,12 +167,11 @@ async function generate(
       model: config.model,
       params: config.params,
     },
-    signal
+    signal,
   );
 
   let activePath = sessionStore.activePath;
   let activeMemories = sessionStore.activeMemories;
-
 
   const finalUserMsgId = userMsg ? crypto.randomUUID() : null;
   const assistantMsgId = crypto.randomUUID();
@@ -172,14 +187,18 @@ async function generate(
     scriptState: story.scriptState,
     onLog,
     userMsgId: finalUserMsgId,
-    assistantMsgId
+    assistantMsgId,
   });
 
   try {
     if (userMsg) {
       const prevEssentials = story.essentials;
       const prevScriptState = story.scriptState;
-      await runScript(scriptBundle.library, scriptBundle.input, hookCtxs.input as unknown as Record<string, unknown>);
+      await runScript(
+        scriptBundle.library,
+        scriptBundle.input,
+        hookCtxs.input as unknown as Record<string, unknown>,
+      );
 
       if (hookCtxs.stopFlag.canceled) {
         sessionStore.rollback();
@@ -206,7 +225,7 @@ async function generate(
         ...userMsg,
         text: hookCtxs.input.input,
         parentId,
-        id: finalUserMsgId!
+        id: finalUserMsgId!,
       });
       sessionStore.enqueue({ type: "message:add", message: finalUserMsg });
       parentId = finalUserMsg.id;
@@ -240,7 +259,11 @@ async function generate(
       hookCtxs.input.scriptState,
     );
 
-    await runScript(scriptBundle.library, scriptBundle.buildContext, buildCtx as unknown as Record<string, unknown>);
+    await runScript(
+      scriptBundle.library,
+      scriptBundle.buildContext,
+      buildCtx as unknown as Record<string, unknown>,
+    );
 
     if (hookCtxs.stopFlag.canceled) {
       sessionStore.rollback();
@@ -270,6 +293,13 @@ async function generate(
       return;
     }
 
+    if (notes && buildCtx.messages && buildCtx.messages.length > 0) {
+      const length = buildCtx.messages.length;
+      const last = buildCtx.messages[length - 1];
+      last.content += `\n\n[SPECIAL NOTES]\n${notes}\n`;
+      buildCtx.messages[length - 1] = last;
+    }
+
     const outputStateSnapshot = getCurrentStateSnapshot();
 
     let accText = "";
@@ -289,9 +319,9 @@ async function generate(
       },
       config.endpoint,
       config.apiKey,
-      signal
+      signal,
     )) {
-      onChunk?.(chunk)
+      onChunk?.(chunk);
       if (chunk.type === "text") {
         accText += chunk.delta;
         setStreamingText(accText);
@@ -316,12 +346,16 @@ async function generate(
 
     const outputCtx = hookCtxs.output(
       outputStateSnapshot,
-      accText, 
-      accText, 
-      buildCtx.essentials, 
+      accText,
+      accText,
+      buildCtx.essentials,
       buildCtx.scriptState,
     );
-    await runScript(scriptBundle.library, scriptBundle.output, outputCtx as unknown as Record<string, unknown>);
+    await runScript(
+      scriptBundle.library,
+      scriptBundle.output,
+      outputCtx as unknown as Record<string, unknown>,
+    );
 
     if (hookCtxs.stopFlag.canceled) {
       clearStreaming();
@@ -345,7 +379,6 @@ async function generate(
       });
     }
 
-
     for (const block of thinkingBlocks) {
       block.messageId = assistantMsgId;
     }
@@ -356,6 +389,7 @@ async function generate(
       text: outputCtx.output,
       parentId,
       thinkingBlocks,
+      steeringNotes: notes,
     });
 
     sessionStore.enqueue({ type: "message:add", message: assistantMsg });
@@ -400,7 +434,11 @@ async function generate(
 /**
  * Runs a full turn: adds a user message then generates a response.
  */
-export async function run(input: string, onLog?: (entry: ScriptLogEntry) => void, onChunk?: (chunk: LLMChunk) => void): Promise<void> {
+export async function run(
+  input: string,
+  onLog?: (entry: ScriptLogEntry) => void,
+  onChunk?: (chunk: LLMChunk) => void,
+): Promise<void> {
   const story = sessionStore.story;
   if (!story) return;
 
@@ -409,7 +447,13 @@ export async function run(input: string, onLog?: (entry: ScriptLogEntry) => void
     text: input,
     parentId: story.currentLeafId,
   });
-  await generate(story.currentLeafId, userMsg,`Turn: "${userMsg.text.slice(0, 50)}"`, onLog, onChunk);
+  await generate({
+    parentId: story.currentLeafId,
+    userMsg,
+    txDescription: `Turn: "${userMsg.text.slice(0, 50)}"`,
+    onLog,
+    onChunk,
+  });
 }
 
 /**
@@ -419,7 +463,12 @@ export async function run(input: string, onLog?: (entry: ScriptLogEntry) => void
  * The current leaf stays in the tree; the new response becomes
  * the active branch (currentLeafId updates via message:add delta).
  */
-export async function retry(onLog?: (entry: ScriptLogEntry) => void, onChunk?: (entry: LLMChunk) => void): Promise<void> {
+export async function retry(options: {
+  notes?: string;
+  onLog?: (entry: ScriptLogEntry) => void;
+  onChunk?: (entry: LLMChunk) => void;
+}): Promise<void> {
+  const { notes, onLog, onChunk } = options;
   const story = sessionStore.story;
   if (!story || !story.currentLeafId) return;
 
@@ -428,15 +477,34 @@ export async function retry(onLog?: (entry: ScriptLogEntry) => void, onChunk?: (
 
   sessionStore.switchBranch(currentLeaf.parentId!);
 
-  await generate(currentLeaf.parentId, null,`Retry from message ${currentLeaf.parentId}`, onLog, onChunk);
+  await generate({
+    parentId: currentLeaf.parentId,
+    userMsg: null,
+    notes,
+    txDescription: `Retry from message ${currentLeaf.parentId}`,
+    onLog,
+    onChunk,
+  });
 }
 
-export async function continueStory(onLog?: (entry: ScriptLogEntry) => void, onChunk?: (chunk: LLMChunk) => void): Promise<void> {
+export async function continueStory(options: {
+  notes?: string;
+  onLog?: (entry: ScriptLogEntry) => void;
+  onChunk?: (entry: LLMChunk) => void;
+}): Promise<void> {
+  const { notes, onLog, onChunk } = options;
   const story = sessionStore.story;
   if (!story || !story.currentLeafId) return;
 
   const currentLeaf = story.messages.find((m) => m.id === story.currentLeafId);
   if (!currentLeaf) return;
 
-  await generate(currentLeaf.id, null,`Continue from message ${currentLeaf.id}`, onLog, onChunk);
+  await generate({
+    parentId: currentLeaf.id,
+    userMsg: null,
+    notes,
+    txDescription: `Continue from message ${currentLeaf.id}`,
+    onLog,
+    onChunk,
+  });
 }

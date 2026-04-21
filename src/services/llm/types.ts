@@ -37,6 +37,7 @@ export interface LLMProvider {
   readonly id: string;
   /** Human-readable name shown in the settings UI. */
   readonly label: string;
+  readonly baseURL: string;
   stream(
     request: LLMRequest,
     endpoint: string,

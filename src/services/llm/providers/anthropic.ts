@@ -4,6 +4,7 @@ import { LLMErrorCode } from "../types";
 import type { LLMProvider, LLMChunk, LLMMessage } from "../types";
 
 const ANTHROPIC_VERSION = "2023-06-01";
+const ANTHROPIC_BASE = "https://api.anthropic.com/v1"
 
 function splitMessages(messages: LLMMessage[]): {
   system: string | undefined;
@@ -20,6 +21,7 @@ function splitMessages(messages: LLMMessage[]): {
 const anthropic: LLMProvider = {
   id: "anthropic",
   label: "Anthropic (Claude)",
+  baseURL: ANTHROPIC_BASE,
 
   async getModels(_endpoint: string, _apiKey: string): Promise<string[]> {
     return [
@@ -30,7 +32,7 @@ const anthropic: LLMProvider = {
   },
 
   async *stream(request, endpoint, apiKey, signal): AsyncIterable<LLMChunk> {
-    const url = `${endpoint.replace(/\/$/, "")}/messages`;
+    const url = `${endpoint ? endpoint.replace(/\/$/, ""): ANTHROPIC_BASE}/messages`;
     const { system, messages } = splitMessages(request.messages);
 
    

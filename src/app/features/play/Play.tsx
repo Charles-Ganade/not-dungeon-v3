@@ -21,7 +21,7 @@ import { ScriptLogEntry } from "@/core/engine/script_runner";
 import { LLMChunk } from "@/services/llm";
 import { HistoryView } from "./HistoryView";
 import { MessageInput } from "./MessageInput";
-import { PlayContext } from "./context";
+import { PlayContext, PlayModes } from "./context";
 import { ActionRow } from "./ActionRow";
 import { Config } from "./Config";
 import { streamingText, streamingThinking } from "@/core/engine/engine";
@@ -43,6 +43,7 @@ export function PlayPage() {
     (ScriptLogEntry & { ts: number })[]
   >([]);
   const [isConfigOpen, setConfigOpen] = createSignal(false);
+  const [currentMode, setCurrentMode] = createSignal<PlayModes>("next");
 
   const isUninitialized = createMemo(() => currentStory.messages.length === 0);
   const unresolvedQuestions = createMemo(() => {
@@ -78,7 +79,16 @@ export function PlayPage() {
   });
 
   return (
-    <PlayContext.Provider value={{ onLog, onChunk, debugLogs, setDebugLogs }}>
+    <PlayContext.Provider
+      value={{
+        onLog,
+        onChunk,
+        debugLogs,
+        setDebugLogs,
+        currentMode,
+        setCurrentMode,
+      }}
+    >
       <Show when={isUninitialized() && hasUnresolvedQuestions()}>
         <Questionnaire
           questions={unresolvedQuestions()}
@@ -86,15 +96,15 @@ export function PlayPage() {
         />
       </Show>
       <Show when={!isUninitialized() || !hasUnresolvedQuestions()}>
-        <div class="flex-1 flex flex-col min-h-0">
-          <Flex ref={scrollRef!} class="w-full h-full overflow-y-auto">
+        <div class="flex-1 flex flex-col min-h-0 min-w-0">
+          <Flex class="w-full h-full">
             <Flex
               direction={"col"}
-              class="flex-1 min-h-full h-fit relative gap-0"
+              class="flex-1 relative gap-0 min-h-0 min-w-0"
             >
               <Flex
                 justify={"end"}
-                class="w-full sticky top-0 left-0 gap-3 p-6"
+                class="w-full absolute top-0 left-0 gap-3 p-6"
               >
                 <button
                   class="btn btn-soft btn-circle"
@@ -127,14 +137,17 @@ export function PlayPage() {
                   </Text>
                 </button>
               </Flex>
-              <div class="w-full flex flex-col items-center justify-center">
+              <div
+                ref={scrollRef!}
+                class="w-full max-w-fit min-w-0 flex flex-col flex-1 items-center pt-4 overflow-y-auto"
+              >
                 <HistoryView />
               </div>
               <Flex
                 align={"center"}
                 justify={"center"}
                 direction={"col"}
-                class="w-full fixed bottom-0 left-0 p-6"
+                class="w-full p-6 pt-1"
               >
                 <div class="flex flex-col gap-2 w-full max-w-3xl">
                   <ActionRow />

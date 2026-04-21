@@ -1,37 +1,30 @@
 import { register } from "../registry";
-import { LLMError, responseToError } from "../errors";
+import { LLMError } from "../errors";
 import { LLMErrorCode } from "../types";
 import type { LLMProvider, LLMChunk } from "../types";
-import { Mistral } from "@mistralai/mistralai";
+import { OpenRouter } from "@openrouter/sdk";
 
-const MISTRAL_BASE = "https://api.mistral.ai/";
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
-const getMistral = (endpoint: string, apiKey: string) =>
-  new Mistral({
+const getOpenRouter = (endpoint: string, apiKey: string) =>
+  new OpenRouter({
     apiKey,
-    serverURL: endpoint ? endpoint.replace(/\/$/, "") : MISTRAL_BASE,
+    serverURL: endpoint ? endpoint.replace(/\/$/, "") : OPENROUTER_BASE,
   });
 
-const mistral: LLMProvider = {
-  id: "mistral",
-  label: "Mistral AI",
-  baseURL: MISTRAL_BASE,
+const openrouter: LLMProvider = {
+  id: "openrouter",
+  label: "OpenRouter",
+  baseURL: OPENROUTER_BASE,
 
   async getModels(endpoint: string, apiKey: string): Promise<string[]> {
     try {
-      const res = await getMistral(endpoint, apiKey).models.list();
-      return (
-        res.data
-          ?.map((model) =>
-            model.type === "base"
-              ? model.id
-              : model.type === "fine-tuned"
-                ? model.id
-                : null,
-          )
-          .filter((model) => typeof model === "string")
-          .sort() || []
-      );
+      const res = await getOpenRouter(endpoint, apiKey).models.list({
+        httpReferer: window.location.hostname,
+        appTitle: "Not Dungeon",
+        outputModalities: "text",
+      });
+      return res.data.map((model) => model.id).sort();
     } catch (err) {
       throw new LLMError(LLMErrorCode.NetworkError, (err as Error).message);
     }
@@ -39,22 +32,23 @@ const mistral: LLMProvider = {
 
   async *stream(request, endpoint, apiKey, signal): AsyncIterable<LLMChunk> {
     try {
-      const stream = await getMistral(endpoint, apiKey).chat.stream(
+      const stream = await getOpenRouter(endpoint, apiKey).chat.send(
         {
-          model: request.model,
-          messages: request.messages,
-          temperature: request.params.temperature,
-          topP: request.params.topP,
-          maxTokens: request.params.maxOutputTokens,
-          frequencyPenalty: request.params.frequencyPenalty,
-          presencePenalty: request.params.presencePenalty,
-          stop:
-            request.params.stop.length > 0 ? request.params.stop : undefined,
-          ...(request.params.thinkingEnabled
-            ? {
-                reasoningEffort: "high",
-              }
-            : {}),
+          chatRequest: {
+            model: request.model,
+            messages: request.messages,
+            temperature: request.params.temperature,
+            topP: request.params.topP,
+            maxTokens: request.params.maxOutputTokens,
+            frequencyPenalty: request.params.frequencyPenalty,
+            presencePenalty: request.params.presencePenalty,
+            stop:
+              request.params.stop.length > 0 ? request.params.stop : undefined,
+            stream: true,
+            ...(request.params.thinkingEnabled
+              ? { reasoning: { effort: "high" } }
+              : {}),
+          },
         },
         { signal },
       );
@@ -62,13 +56,20 @@ const mistral: LLMProvider = {
       let isThinkingTagMode = false;
 
       for await (const chunk of stream) {
-        const delta = chunk.data.choices?.[0]?.delta;
+        const delta = chunk.choices?.[0]?.delta;
         if (!delta) continue;
 
         const reasoningDelta: string | undefined =
-          delta.content && typeof delta.content !== "string"
-            ? delta.content.filter((c) => c.type === "thinking").join("")
-            : undefined;
+          delta.reasoning ??
+          delta.reasoningDetails
+            ?.map((d) =>
+              d.type === "reasoning.text"
+                ? d.text
+                : d.type === "reasoning.summary"
+                  ? d.summary
+                  : "",
+            )
+            .join("");
         if (typeof reasoningDelta === "string" && reasoningDelta) {
           yield { type: "thinking", delta: reasoningDelta };
         }
@@ -120,4 +121,4 @@ const mistral: LLMProvider = {
   },
 };
 
-register(mistral);
+register(openrouter);

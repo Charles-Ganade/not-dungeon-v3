@@ -1,159 +1,107 @@
 import { register } from "../registry";
-import { LLMError, responseToError } from "../errors";
+import { LLMError } from "../errors";
 import { LLMErrorCode } from "../types";
 import type { LLMProvider, LLMChunk } from "../types";
-import { isValidUrl } from "@/utils";
+import { Ollama } from "ollama/browser";
+
+const getOllama = (endpoint: string) =>
+  new Ollama({
+    headers: {
+      "ngrok-skip-browser-warning": "true",
+    },
+    ...(endpoint ? {
+      host: endpoint.replace(/\/$/, "")
+    } : {})
+  });
 
 const ollama: LLMProvider = {
   id: "ollama",
-  label: "Ollama (local)",
+  label: "Ollama Proxy (local)",
+  baseURL: "http://localhost:11434",
 
   async getModels(endpoint: string, _apiKey: string): Promise<string[]> {
-    const url = `${endpoint.replace(/\/$/, "")}/api/tags`;
-    if (!isValidUrl(url)) {
-      throw new LLMError(LLMErrorCode.ProviderUnavailable, "Invalid URL.");
-    }
-    let res: Response;
     try {
-      res = await fetch(url, {
-        headers: {
-          "ngrok-skip-browser-warning": "true",
-        }
-      });
+      const { models } = await getOllama(endpoint).list();
+      return models.map(m => m.name).sort();
     } catch (err) {
       throw new LLMError(LLMErrorCode.NetworkError, (err as Error).message);
     }
-    if (!res.ok) throw await responseToError(res);
-    const json = await res.json() as { models?: { name: string }[] };
-    if (!Array.isArray(json.models)) {
-      throw new LLMError(LLMErrorCode.ProviderError, "Unexpected response shape from /api/tags");
-    }
-    return json.models
-      .map((m) => m.name)
-      .filter(Boolean)
-      .sort();
   },
 
   async *stream(request, endpoint, _apiKey, signal): AsyncIterable<LLMChunk> {
-    const url = `${endpoint.replace(/\/$/, "")}/api/chat`;
-
-    let res: Response;
     try {
-      res = await fetch(url, {
-        method: "POST",
-        signal,
-        headers: {
-          "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true",
+      const params = request.params;
+      const stream = await getOllama(endpoint.replace(/\/$/, "")).chat({
+        stream: true,
+        model: request.model,
+        messages: request.messages,
+        options: {
+          num_ctx: params.contextWindow,
+          frequency_penalty: params.frequencyPenalty,
+          num_predict: params.maxOutputTokens,
+          presence_penalty: params.presencePenalty,
+          stop: params.stop,
+          temperature: params.temperature,
+          top_p: params.topP
         },
-        body: JSON.stringify({
-          model: request.model,
-          messages: request.messages,
-          stream: true,
-          options: {
-            temperature: request.params.temperature,
-            top_p: request.params.topP,
-            num_predict: request.params.maxOutputTokens,
-            stop: request.params.stop.length > 0 ? request.params.stop : undefined,
-          },
-          think: request.params.thinkingEnabled
-        }),
-      });
-    } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        yield { type: "error", code: LLMErrorCode.Aborted, message: "Request aborted" };
-        return;
-      }
-      yield { type: "error", code: LLMErrorCode.NetworkError, message: (err as Error).message };
-      return;
-    }
+        think: params.thinkingEnabled
+      })
 
-    if (!res.ok) {
-      yield (await responseToError(res)).toChunk();
-      return;
-    }
+      let isThinkingTagMode = false;
 
-    if (!res.body) {
-      yield { type: "error", code: LLMErrorCode.ProviderError, message: "No response body" };
-      return;
-    }
+      for await (const chunk of stream) {
+        const thinkingDelta = chunk.message?.thinking;
+        if (typeof thinkingDelta === "string" && thinkingDelta) {
+          yield { type: "thinking", delta: thinkingDelta };
+        }
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    
-    let isThinkingTagMode = false;
+        const contentDelta = chunk.message?.content;
+        if (typeof contentDelta === "string" && contentDelta) {
+          let remaining = contentDelta;
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          try {
-            const json = JSON.parse(trimmed);
-
-            if (json.error) {
-              yield { type: "error", code: LLMErrorCode.ProviderError, message: json.error };
-              return;
-            }
-
-            const contentDelta = json.message?.content;
-            const thinkingDelta = json.message?.thinking;
-            if (typeof thinkingDelta === "string" && thinkingDelta) {
-              thinkingDelta;
-              yield { type: "thinking", delta: thinkingDelta };
-            }
-            if (typeof contentDelta === "string" && contentDelta) {
-              let remaining = contentDelta;
-              
-              while (remaining) {
-                if (isThinkingTagMode) {
-                  const endIndex = remaining.indexOf("</think>");
-                  if (endIndex !== -1) {
-                    const chunk = remaining.slice(0, endIndex);
-                    if (chunk) yield { type: "thinking", delta: chunk };
-                    isThinkingTagMode = false;
-                    remaining = remaining.slice(endIndex + 8);
-                  } else {
-                    yield { type: "thinking", delta: remaining };
-                    remaining = "";
-                  }
-                } else {
-                  const startIndex = remaining.indexOf("<think>");
-                  if (startIndex !== -1) {
-                    const chunk = remaining.slice(0, startIndex);
-                    if (chunk) yield { type: "text", delta: chunk };
-                    isThinkingTagMode = true;
-                    remaining = remaining.slice(startIndex + 7);
-                  } else {
-                    yield { type: "text", delta: remaining };
-                    remaining = "";
-                  }
-                }
+          while (remaining) {
+            if (isThinkingTagMode) {
+              const endIndex = remaining.indexOf("</think>");
+              if (endIndex !== -1) {
+                const chunk = remaining.slice(0, endIndex);
+                if (chunk) yield { type: "thinking", delta: chunk };
+                isThinkingTagMode = false;
+                remaining = remaining.slice(endIndex + 8);
+              } else {
+                yield { type: "thinking", delta: remaining };
+                remaining = "";
+              }
+            } else {
+              const startIndex = remaining.indexOf("<think>");
+              if (startIndex !== -1) {
+                const chunk = remaining.slice(0, startIndex);
+                if (chunk) yield { type: "text", delta: chunk };
+                isThinkingTagMode = true;
+                remaining = remaining.slice(startIndex + 7);
+              } else {
+                yield { type: "text", delta: remaining };
+                remaining = "";
               }
             }
-
-            if (json.done) return;
-          } catch {
           }
         }
+
+        if (chunk.done) return;
       }
     } catch (err) {
       if ((err as Error).name === "AbortError") {
-        yield { type: "error", code: LLMErrorCode.Aborted, message: "Stream aborted" };
+        yield {
+          type: "error",
+          code: LLMErrorCode.Aborted,
+          message: "Request aborted",
+        };
         return;
       }
-      yield { type: "error", code: LLMErrorCode.NetworkError, message: (err as Error).message };
-    } finally {
-      reader.releaseLock();
+      yield {
+        type: "error",
+        code: LLMErrorCode.NetworkError,
+        message: (err as Error).message,
+      };
     }
   },
 };

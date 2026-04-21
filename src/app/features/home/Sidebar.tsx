@@ -52,7 +52,9 @@ function SidebarItem(props: SidebarItemProps) {
 
 function HopBackCard() {
   const { isSidebarOpen } = useHome();
-  const lastStory = createMemo(() => libraryStore.stories[0]);
+  const lastStory = createMemo(
+    () => libraryStore.items.filter((v) => v.kind === "story")[0].data,
+  );
   const navigator = useNavigate();
 
   return (

@@ -32,7 +32,7 @@ export function EditStoryCardModal(props: EditStoryCardModalProps) {
     | (Pick<StoryCard, "title" | "content" | "tags" | "enabled" | "triggers"> &
         Partial<StoryCard>)
     | StoryCard
-  >(props.card ? { ...props.card } : { ...defaultCard });
+  >(props.card ? { ...props.card } : structuredClone(defaultCard));
   const [tags, setTags] = createSignal("");
   const [triggers, setTriggers] = createSignal("");
   const [isDisabled, setDisabled] = createSignal(false);
@@ -64,7 +64,7 @@ export function EditStoryCardModal(props: EditStoryCardModalProps) {
   );
 
   const reset = () => {
-    setCard({ ...defaultCard });
+    setCard(structuredClone(defaultCard));
     setTags("");
     setTriggers("");
   };
@@ -260,6 +260,13 @@ export function EditStoryCardModal(props: EditStoryCardModalProps) {
                     setTriggers("");
                   }
                 }}
+                onBlur={() => {
+                  const value = triggers().trim().toLowerCase();
+                  if (!value) return;
+                  if (!card.triggers.includes(value))
+                    setCard("triggers", card.triggers.length, value);
+                  setTriggers("");
+                }}
               />
             </label>
           </div>
@@ -309,6 +316,16 @@ export function EditStoryCardModal(props: EditStoryCardModalProps) {
                       setCard("tags", card.tags.length, value);
                     setTags("");
                   }
+                }}
+                onBlur={() => {
+                  let value = tags().trim();
+                  if (value.startsWith("#")) {
+                    value = value.replace("#", "");
+                  }
+                  if (!value) return;
+                  if (!card.tags.includes(value))
+                    setCard("tags", card.tags.length, value);
+                  setTags("");
                 }}
               />
             </label>

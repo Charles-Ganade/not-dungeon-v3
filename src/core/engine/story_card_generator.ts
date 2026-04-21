@@ -112,7 +112,6 @@ export async function generateStoryCard(
   }
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    console.log(parsed);
     return {
       title: parsed.title || targetTitle,
       content: parsed.value || "",

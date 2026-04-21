@@ -77,6 +77,12 @@ export interface HistoryMessage {
    * Used to show an "edited" indicator in the UI.
    */
   editedAt?: number;
+  /**
+   * Steering notes provided by the user for retry/continueStory.
+   * Stored as metadata (like thinking blocks) but not persisted
+   * to history—one-time guidance only.
+   */
+  steeringNotes?: string;
 }
 
 /**

@@ -115,5 +115,4 @@ export async function seedStarterScenarioIfNeeded() {
   })
 
   await db.scenarios.add(starterScenario);
-  console.log("Seeded starter scenario with fully integrated Story Arc Engine.");
 }

@@ -1,4 +1,7 @@
-import { list as listProviders } from "@/services/llm/registry";
+import {
+  get as getProvider,
+  list as listProviders,
+} from "@/services/llm/registry";
 import { settingsStore } from "@/store";
 import { FaSolidEye, FaSolidEyeSlash, FaSolidRefresh } from "solid-icons/fa";
 import {
@@ -15,9 +18,16 @@ import { listModels } from "@/services/llm";
 import { toast } from "solid-sonner";
 import { debouncedPatch } from "../Settings";
 
-const fetchModels = ([providerId, endpoint, apiKey]: Parameters<
+const fetchModels = async ([providerId, endpoint, apiKey]: Parameters<
   typeof listModels
->) => listModels(providerId, endpoint, apiKey);
+>) => {
+  try {
+    return await listModels(providerId, endpoint, apiKey);
+  } catch (err) {
+    toast.error((err as Error).message ?? "Something went wrong");
+    return [];
+  }
+};
 
 export function APIPanel() {
   const [showApiKey, setShowApiKey] = createSignal(false);
@@ -32,15 +42,6 @@ export function APIPanel() {
     fetchModels,
   );
 
-  createEffect(
-    on(
-      () => listModelsResult.error,
-      (err) => {
-        if (err) toast.error(err.message || "Something went wrong");
-      },
-      { defer: true },
-    ),
-  );
   return (
     <Flex direction={"col"} class="gap-2 w-full">
       <PanelLabel>API Settings</PanelLabel>
@@ -49,14 +50,24 @@ export function APIPanel() {
           <div>
             <Text>Provider</Text>
             <select
-              class="select"
+              class="select inline"
               value={settingsStore.settings.API.providerId}
               onChange={(e) => {
                 settingsStore.patch({
-                  API: { providerId: e.currentTarget.value },
+                  API: { providerId: e.currentTarget.value, model: "" },
                 });
               }}
             >
+              <option
+                disabled
+                selected={
+                  listProviders().findIndex(
+                    (v) => v.id === settingsStore.settings.API.providerId,
+                  ) === -1
+                }
+              >
+                Select a provider
+              </option>
               <For each={listProviders()}>
                 {(provider) => (
                   <option
@@ -75,7 +86,9 @@ export function APIPanel() {
             <Text>Base URL</Text>
             <input
               type="text"
-              placeholder="Type here"
+              placeholder={
+                getProvider(settingsStore.settings.API.providerId).baseURL
+              }
               class="input  w-full"
               value={settingsStore.settings.API.endpoint}
               onInput={({ target }) => {
@@ -118,12 +131,22 @@ export function APIPanel() {
           <Text>Model</Text>
           <Flex class="gap-2">
             <select
-              class="select flex-1"
+              class="select inline flex-1"
               value={settingsStore.settings.API.model}
               onChange={(e) => {
                 settingsStore.patch({ API: { model: e.currentTarget.value } });
               }}
             >
+              <option
+                disabled
+                selected={
+                  listModelsResult()?.findIndex(
+                    (model) => settingsStore.settings.API.model === model,
+                  ) === -1 || !listModelsResult()
+                }
+              >
+                Select a model
+              </option>
               <Show when={!listModelsResult.error}>
                 <For each={listModelsResult() ?? []}>
                   {(model) => (

@@ -1,9 +1,13 @@
 import { ScriptLogEntry } from "@/core/engine/script_runner";
 import { LLMChunk } from "@/services/llm";
-import { createContext, useContext } from "solid-js";
+import { Accessor, createContext, Setter, useContext } from "solid-js";
 import { SetStoreFunction, Store } from "solid-js/store";
 
+export type PlayModes = "next" | "retry" | "continue"
+
 interface PlayContext {
+  currentMode: Accessor<PlayModes>;
+  setCurrentMode: Setter<PlayModes>;
   onLog: (entry: ScriptLogEntry) => void;
   onChunk: (chunk: LLMChunk) => void;
   setDebugLogs: SetStoreFunction<{
@@ -15,7 +19,7 @@ interface PlayContext {
     level: "error" | "log" | "warn";
     args: unknown[];
     ts: number
-  }[]>
+  }[]>;
 }
 
 export const PlayContext = createContext<PlayContext>();

@@ -2,159 +2,108 @@ import { register } from "../registry";
 import { LLMError, responseToError } from "../errors";
 import { LLMErrorCode } from "../types";
 import type { LLMProvider, LLMChunk } from "../types";
-import { isValidUrl } from "@/utils";
+import OpenAI from "openai";
+
+const OPENAI_BASE = "https://api.openai.com/v1";
+
+const getOpenAI = (endpoint: string, apiKey: string) =>
+  new OpenAI({
+    apiKey,
+    baseURL: endpoint ? endpoint.replace(/\/$/, "") : OPENAI_BASE,
+    dangerouslyAllowBrowser: true,
+  });
 
 const openai: LLMProvider = {
   id: "openai",
   label: "OpenAI / Compatible",
+  baseURL: OPENAI_BASE,
 
   async getModels(endpoint: string, apiKey: string): Promise<string[]> {
-    const url = `${endpoint.replace(/\/$/, "")}/models`;
-    if (!isValidUrl(url)) {
-      throw new LLMError(LLMErrorCode.ProviderUnavailable, "Invalid URL.");
-    }
-    let res: Response;
     try {
-      res = await fetch(url, {
-        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-      });
+      const openai = getOpenAI(endpoint, apiKey);
+      const models = await openai.models.list();
+      return models.data.map((m) => m.id).sort();
     } catch (err) {
       throw new LLMError(LLMErrorCode.NetworkError, (err as Error).message);
     }
-    if (!res.ok) throw await responseToError(res);
-    const json = await res.json() as { data?: { id: string }[] };
-    if (!Array.isArray(json.data)) {
-      throw new LLMError(LLMErrorCode.ProviderError, "Unexpected response shape from /models");
-    }
-    return json.data
-      .map((m) => m.id)
-      .filter(Boolean)
-      .sort();
   },
 
-  async *stream(request, endpoint, apiKey, signal): AsyncIterable<LLMChunk> {
-    const url = `${endpoint.replace(/\/$/, "")}/chat/completions`;
+  async *stream(
+  request,
+  endpoint,
+  apiKey,
+  signal
+): AsyncIterable<LLMChunk> {
+  const client = getOpenAI(endpoint, apiKey);
 
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-        },
-        body: JSON.stringify({
-          model: request.model,
-          messages: request.messages,
-          temperature: request.params.temperature,
-          top_p: request.params.topP,
-          max_tokens: request.params.maxOutputTokens,
-          frequency_penalty: request.params.frequencyPenalty,
-          presence_penalty: request.params.presencePenalty,
-          stop: request.params.stop.length > 0 ? request.params.stop : undefined,
-          stream: true,
-          reasoning: {
-            effort: request.params.thinkingEnabled ? "high" : "none"
-          }
-        }),
-      });
-    } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        yield { type: "error", code: LLMErrorCode.Aborted, message: "Request aborted" };
-        return;
-      }
-      yield { type: "error", code: LLMErrorCode.NetworkError, message: (err as Error).message };
+  let stream;
+
+  try {
+    stream = await client.responses.stream(
+      {
+        model: request.model,
+        input: request.messages,
+        temperature: request.params.temperature ?? undefined,
+        top_p: request.params.topP ?? undefined,
+        max_output_tokens: request.params.maxOutputTokens ?? undefined,
+      },
+      { signal }
+    );
+  } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      yield {
+        type: "error",
+        code: LLMErrorCode.Aborted,
+        message: "Request aborted",
+      };
       return;
     }
 
-    if (!res.ok) {
-      yield (await responseToError(res)).toChunk();
-      return;
-    }
+    yield {
+      type: "error",
+      code: LLMErrorCode.NetworkError,
+      message: (err as Error).message,
+    };
+    return;
+  }
 
-    if (!res.body) {
-      yield { type: "error", code: LLMErrorCode.ProviderError, message: "No response body" };
-      return;
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    
-   
-    let isThinkingTagMode = false;
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data:")) continue;
-
-          const data = trimmed.slice(5).trim();
-          if (data === "[DONE]") return;
-
-          try {
-            const json = JSON.parse(data);
-            const delta = json.choices?.[0]?.delta;
-            if (!delta) continue;
-
-           
-            if (typeof delta.reasoning_content === "string" && delta.reasoning_content) {
-              yield { type: "thinking", delta: delta.reasoning_content };
-            }
-
-           
-            if (typeof delta.content === "string" && delta.content) {
-              let remaining = delta.content;
-              while (remaining) {
-                if (isThinkingTagMode) {
-                  const endIndex = remaining.indexOf("</think>");
-                  if (endIndex !== -1) {
-                    const chunk = remaining.slice(0, endIndex);
-                    if (chunk) yield { type: "thinking", delta: chunk };
-                    isThinkingTagMode = false;
-                    remaining = remaining.slice(endIndex + 8);
-                  } else {
-                    yield { type: "thinking", delta: remaining };
-                    remaining = "";
-                  }
-                } else {
-                  const startIndex = remaining.indexOf("<think>");
-                  if (startIndex !== -1) {
-                    const chunk = remaining.slice(0, startIndex);
-                    if (chunk) yield { type: "text", delta: chunk };
-                    isThinkingTagMode = true;
-                    remaining = remaining.slice(startIndex + 7);
-                  } else {
-                    yield { type: "text", delta: remaining };
-                    remaining = "";
-                  }
-                }
-              }
-            }
-          } catch {
-           
-          }
+  try {
+    for await (const event of stream) {
+      try {
+        if (event.type === "response.output_text.delta") {
+          yield {
+            type: "text",
+            delta: event.delta,
+          };
         }
+
+        if (event.type === "response.reasoning_text.delta" || event.type === "response.reasoning_summary_text.delta") {
+          yield {
+            type: "thinking",
+            delta: event.delta,
+          };
+        }
+      } catch {
+        // ignore malformed events
       }
-    } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        yield { type: "error", code: LLMErrorCode.Aborted, message: "Stream aborted" };
-        return;
-      }
-      yield { type: "error", code: LLMErrorCode.NetworkError, message: (err as Error).message };
-    } finally {
-      reader.releaseLock();
     }
-  },
+  } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      yield {
+        type: "error",
+        code: LLMErrorCode.Aborted,
+        message: "Stream aborted",
+      };
+      return;
+    }
+
+    yield {
+      type: "error",
+      code: LLMErrorCode.NetworkError,
+      message: (err as Error).message,
+    };
+  }
+}
 };
 
 register(openai);
