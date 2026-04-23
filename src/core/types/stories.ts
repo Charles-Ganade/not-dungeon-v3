@@ -102,6 +102,10 @@ export interface Memory {
   createdAt: number;
   /** Set if the user manually edited the memory content. */
   editedAt?: number;
+  /** Estimated token count of the summary (for truncation and margin checks). */
+  estimatedTokens?: number;
+  /** Track how many times this memory has been included in subsequent summaries (prevent cascading). */
+  summarizationDepth?: number;
 }
 
 /**

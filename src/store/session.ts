@@ -1,9 +1,22 @@
-import { createStore, produce, reconcile, StoreSetter, unwrap } from "solid-js/store";
+import {
+  createStore,
+  produce,
+  reconcile,
+  StoreSetter,
+  unwrap,
+} from "solid-js/store";
 import { createMemo } from "solid-js";
 import { saveStory, saveThumbnail, touchStory } from "@/services/db";
 import { libraryStore } from "./library";
-import type { Story, HistoryMessage, Memory, StoryCard, ScriptBundle } from "@/core/types/stories";
+import type {
+  Story,
+  HistoryMessage,
+  Memory,
+  StoryCard,
+  ScriptBundle,
+} from "@/core/types/stories";
 import type { Session, Delta, DeltaTransaction } from "@/core/types/sessions";
+import { validateActiveMemories } from "@/core/engine/context_builder";
 
 interface SessionState {
   story: Story | null;
@@ -38,15 +51,14 @@ const activePath = createMemo<HistoryMessage[]>(() => {
 
 /**
  * The memories whose messageIds are all present in the current
- * active path. Irrelevant branch memories are excluded.
+ * active path and form contiguous segments. Irrelevant branch
+ * memories and memories with broken ID sequences are excluded.
  */
 const activeMemories = createMemo<Memory[]>(() => {
   const story = state.story;
   if (!story) return [];
-  const pathIds = new Set(activePath().map((m) => m.id));
-  return story.memories.filter((mem) =>
-    mem.messageIds.every((id) => pathIds.has(id))
-  );
+  const path = activePath();
+  return validateActiveMemories(story.memories, path);
 });
 
 const siblingLeaves = createMemo<HistoryMessage[]>(() => {
@@ -57,7 +69,7 @@ const siblingLeaves = createMemo<HistoryMessage[]>(() => {
   if (!currentLeaf) return [];
 
   return story.messages.filter(
-    (m) => m.parentId === currentLeaf.parentId && m.id !== story.currentLeafId
+    (m) => m.parentId === currentLeaf.parentId && m.id !== story.currentLeafId,
   );
 });
 
@@ -115,72 +127,114 @@ function close(): void {
 }
 
 function applyDelta(delta: Delta): void {
-  setState("story", produce((story) => {
-    if (story) {
-      switch (delta.type) {
-        case "message:add":
-          story.messages.push(delta.message);
-          story.currentLeafId = delta.message.id;
-          break;
-        case "message:edit": {
-          const msg = story.messages.find((m) => m.id === delta.messageId);
-          if (msg) { msg.text = delta.next; msg.editedAt = Date.now(); }
-          break;
-        }
-        case "message:remove":
-          story.messages = story.messages.filter((m) => m.id !== delta.message.id);
-          if (story.currentLeafId === delta.message.id) {
-            story.currentLeafId = delta.message.parentId;
+  setState(
+    "story",
+    produce((story) => {
+      if (story) {
+        switch (delta.type) {
+          case "message:add":
+            story.messages.push(delta.message);
+            story.currentLeafId = delta.message.id;
+            break;
+          case "message:edit": {
+            const msg = story.messages.find((m) => m.id === delta.messageId);
+            if (msg) {
+              msg.text = delta.next;
+              msg.editedAt = Date.now();
+            }
+            break;
           }
-          break;
-        case "memory:add":
-          story.memories.push(delta.memory);
-          break;
-        case "memory:edit": {
-          const mem = story.memories.find((m) => m.id === delta.memoryId);
-          if (mem) { mem.content = delta.next; mem.editedAt = Date.now(); }
-          break;
+          case "message:remove":
+            story.messages = story.messages.filter(
+              (m) => m.id !== delta.message.id,
+            );
+            if (story.currentLeafId === delta.message.id) {
+              story.currentLeafId = delta.message.parentId;
+            }
+            break;
+          case "memory:add":
+            story.memories.push(delta.memory);
+            break;
+          case "memory:edit": {
+            const mem = story.memories.find((m) => m.id === delta.memoryId);
+            if (mem) {
+              mem.content = delta.next;
+              mem.editedAt = Date.now();
+            }
+            break;
+          }
+          case "memory:remove":
+            story.memories = story.memories.filter(
+              (m) => m.id !== delta.memory.id,
+            );
+            break;
+          case "storyCard:add":
+            story.storyCards.push(delta.card);
+            break;
+          case "storyCard:edit": {
+            const card = story.storyCards.find((c) => c.id === delta.cardId);
+            if (card)
+              Object.assign(card, delta.next, { updatedAt: Date.now() });
+            break;
+          }
+          case "storyCard:remove":
+            story.storyCards = story.storyCards.filter(
+              (c) => c.id !== delta.card.id,
+            );
+            break;
+          case "essentials:edit":
+            story.essentials = delta.next;
+            break;
+          case "scriptState:edit":
+            story.scriptState = delta.next;
+            break;
+          default:
+            delta satisfies never;
         }
-        case "memory:remove":
-          story.memories = story.memories.filter((m) => m.id !== delta.memory.id);
-          break;
-        case "storyCard:add":
-          story.storyCards.push(delta.card);
-          break;
-        case "storyCard:edit": {
-          const card = story.storyCards.find((c) => c.id === delta.cardId);
-          if (card) Object.assign(card, delta.next, { updatedAt: Date.now() });
-          break;
-        }
-        case "storyCard:remove":
-          story.storyCards = story.storyCards.filter((c) => c.id !== delta.card.id);
-          break;
-        case "essentials:edit":
-          story.essentials = delta.next;
-          break;
-        case "scriptState:edit":
-          story.scriptState = delta.next;
-          break;
-        default:
-          delta satisfies never;
       }
-    }
-  }));
+    }),
+  );
 }
 
 function invertDelta(delta: Delta): Delta {
   switch (delta.type) {
-    case "message:add":    return { type: "message:remove", message: delta.message };
-    case "message:remove": return { type: "message:add", message: delta.message };
-    case "message:edit":   return { type: "message:edit", messageId: delta.messageId, prev: delta.next, next: delta.prev };
-    case "memory:add":     return { type: "memory:remove", memory: delta.memory };
-    case "memory:remove":  return { type: "memory:add", memory: delta.memory };
-    case "memory:edit":    return { type: "memory:edit", memoryId: delta.memoryId, prev: delta.next, next: delta.prev };
-    case "storyCard:add":  return { type: "storyCard:remove", card: delta.card };
-    case "storyCard:remove":return { type: "storyCard:add", card: delta.card };
-    case "storyCard:edit": return { type: "storyCard:edit", cardId: delta.cardId, prev: delta.next, next: delta.prev };
-    case "essentials:edit": return { type: "essentials:edit", prev: delta.next, next: delta.prev};
-    case "scriptState:edit": return { type: "scriptState:edit", prev: delta.next, next: delta.prev };
+    case "message:add":
+      return { type: "message:remove", message: delta.message };
+    case "message:remove":
+      return { type: "message:add", message: delta.message };
+    case "message:edit":
+      return {
+        type: "message:edit",
+        messageId: delta.messageId,
+        prev: delta.next,
+        next: delta.prev,
+      };
+    case "memory:add":
+      return { type: "memory:remove", memory: delta.memory };
+    case "memory:remove":
+      return { type: "memory:add", memory: delta.memory };
+    case "memory:edit":
+      return {
+        type: "memory:edit",
+        memoryId: delta.memoryId,
+        prev: delta.next,
+        next: delta.prev,
+      };
+    case "storyCard:add":
+      return { type: "storyCard:remove", card: delta.card };
+    case "storyCard:remove":
+      return { type: "storyCard:add", card: delta.card };
+    case "storyCard:edit":
+      return {
+        type: "storyCard:edit",
+        cardId: delta.cardId,
+        prev: delta.next,
+        next: delta.prev,
+      };
+    case "essentials:edit":
+      return { type: "essentials:edit", prev: delta.next, next: delta.prev };
+    case "scriptState:edit":
+      return { type: "scriptState:edit", prev: delta.next, next: delta.prev };
     default:
       delta satisfies never;
       return delta;
@@ -194,7 +248,7 @@ function invertDelta(delta: Delta): Delta {
 function beginTransaction(description: string): string {
   const id = crypto.randomUUID();
   setState("session", "pendingTransactionId", id);
- 
+
   _pendingDescription = description;
   _pendingDeltas = [];
   return id;
@@ -227,13 +281,16 @@ function commit(): void {
     timestamp: Date.now(),
   };
 
-  setState("session", produce((session) => {
-    if (session) {
-      session.undoStack.push(transaction);
-      session.redoStack = [];
-      session.pendingTransactionId = null;
-    }
-  }));
+  setState(
+    "session",
+    produce((session) => {
+      if (session) {
+        session.undoStack.push(transaction);
+        session.redoStack = [];
+        session.pendingTransactionId = null;
+      }
+    }),
+  );
 
   _pendingDeltas = [];
   _pendingDescription = "";
@@ -245,7 +302,6 @@ function commit(): void {
  * Called when a turn errors out mid-way.
  */
 function rollback(): void {
- 
   for (const delta of [..._pendingDeltas].reverse()) {
     applyDelta(invertDelta(delta));
   }
@@ -261,12 +317,15 @@ function undo(): void {
   const reversedDeltas = [...transaction.deltas].reverse().map(invertDelta);
   for (const delta of reversedDeltas) applyDelta(delta);
 
-  setState("session", produce((session) => {
-    if (session) {
-      session.undoStack.pop();
-      session.redoStack.push(transaction);
-    }
-  }));
+  setState(
+    "session",
+    produce((session) => {
+      if (session) {
+        session.undoStack.pop();
+        session.redoStack.push(transaction);
+      }
+    }),
+  );
 
   scheduleSave();
 }
@@ -277,12 +336,15 @@ function redo(): void {
   const transaction = state.session.redoStack.at(-1)!;
   for (const delta of transaction.deltas) applyDelta(delta);
 
-  setState("session", produce((session) => {
-    if (session) {
-      session.redoStack.pop();
-      session.undoStack.push(transaction);
-    }
-  }));
+  setState(
+    "session",
+    produce((session) => {
+      if (session) {
+        session.redoStack.pop();
+        session.undoStack.push(transaction);
+      }
+    }),
+  );
 
   scheduleSave();
 }
@@ -376,12 +438,19 @@ export function editScriptState(newText: string): void {
  * These changes are NOT tracked as deltas (not essential to gameplay).
  * Pass only the properties you want to update.
  */
-export function editStoryMetadata(updates: Partial<Pick<Story, "name" | "description" | "authorNotes" | "instructions" | "kvMemory">>): void {
+export function editStoryMetadata(
+  updates: Partial<
+    Pick<
+      Story,
+      "name" | "description" | "authorNotes" | "instructions" | "kvMemory"
+    >
+  >,
+): void {
   const story = sessionStore.story;
   if (!story) return;
 
   const hasChanges = Object.entries(updates).some(
-    ([key, value]) => story[key as keyof typeof updates] !== value
+    ([key, value]) => story[key as keyof typeof updates] !== value,
   );
 
   if (!hasChanges) return;
@@ -395,7 +464,7 @@ export function editKvMemory(data: Record<string, unknown>) {
   if (!kv) return;
 
   const hasChanges = Object.entries(data).some(
-    ([key, value]) => kv[key as keyof typeof data] !== value
+    ([key, value]) => kv[key as keyof typeof data] !== value,
   );
 
   if (!hasChanges) return;
@@ -414,7 +483,7 @@ async function editThumbnail(blob: Blob | null): Promise<void> {
   if (!state.story) return;
 
   let newThumbnailId: string | undefined = undefined;
-  
+
   if (blob) {
     newThumbnailId = await saveThumbnail(blob);
   }
@@ -428,7 +497,7 @@ export function editScripts(updates: Partial<ScriptBundle>): void {
   if (!scripts) return;
 
   const hasChanges = Object.entries(updates).some(
-    ([key, value]) => scripts[key as keyof typeof updates] !== value
+    ([key, value]) => scripts[key as keyof typeof updates] !== value,
   );
 
   if (!hasChanges) return;
@@ -437,23 +506,27 @@ export function editScripts(updates: Partial<ScriptBundle>): void {
   scheduleSave();
 }
 
-function editMemory(memoryId: string, memory: string | ((prev: string) => string)) {
+function editMemory(
+  memoryId: string,
+  memory: string | ((prev: string) => string),
+) {
   const memories = activeMemories();
   if (!memories) return;
-  const prev = activeMemories().find(m => m.id === memoryId)?.content;
+  const prev = activeMemories().find((m) => m.id === memoryId)?.content;
   let next: string;
   if (!prev) return;
   beginTransaction(`editing memory: ${memoryId}`);
   if (typeof memory === "function") {
     next = memory(prev);
-  }
-  else {
+  } else {
     next = memory;
   }
   enqueue({
     type: "memory:edit",
-    prev, next, memoryId
-  })
+    prev,
+    next,
+    memoryId,
+  });
   commit();
 }
 
@@ -462,31 +535,32 @@ function addStoryCard(card: StoryCard | StoryCard[]) {
   if (!storyCards) return;
   beginTransaction("adding story card/s");
   if (Array.isArray(card)) {
-    card.forEach(c => {
+    card.forEach((c) => {
       enqueue({
         type: "storyCard:add",
-        card: c
+        card: c,
       });
-    })
-  }
-  else {
+    });
+  } else {
     enqueue({
       type: "storyCard:add",
-      card
-    })
+      card,
+    });
   }
   commit();
 }
 
-function editStoryCard(cardId: string, card: StoryCard | ((prev: StoryCard) => StoryCard)) {
+function editStoryCard(
+  cardId: string,
+  card: StoryCard | ((prev: StoryCard) => StoryCard),
+) {
   const storyCards = sessionStore.story?.storyCards;
   if (!storyCards) return;
 
-  const index = state.story!.storyCards.findIndex(
-    (item) => item.id === cardId,
-  );
+  const index = state.story!.storyCards.findIndex((item) => item.id === cardId);
 
-  if (index === -1) throw new Error(`Story card with id ${cardId} does not exist`);
+  if (index === -1)
+    throw new Error(`Story card with id ${cardId} does not exist`);
 
   const prev = storyCards[index];
   const next = typeof card === "function" ? card(prev) : card;
@@ -496,8 +570,8 @@ function editStoryCard(cardId: string, card: StoryCard | ((prev: StoryCard) => S
     type: "storyCard:edit",
     cardId,
     prev,
-    next
-  })
+    next,
+  });
   commit();
 }
 
@@ -505,42 +579,69 @@ function removeStoryCard(cardId: string) {
   const storyCards = sessionStore.story?.storyCards;
   if (!storyCards) return;
 
-  const index = state.story!.storyCards.findIndex(
-    (item) => item.id === cardId,
-  );
+  const index = state.story!.storyCards.findIndex((item) => item.id === cardId);
 
-  if (index === -1) throw new Error(`Story card with id ${cardId} does not exist`);
+  if (index === -1)
+    throw new Error(`Story card with id ${cardId} does not exist`);
 
   const card = storyCards[index];
 
   beginTransaction(`deleting story card ${cardId}`);
   enqueue({
     type: "storyCard:remove",
-    card
+    card,
   });
   commit();
 }
 
 export const sessionStore = {
- 
-  get story() { return state.story; },
-  get session() { return state.session; },
-  get activePath() { return activePath(); },
-  get activeMemories() { return activeMemories(); },
-  get siblingLeaves() { return siblingLeaves(); },
-  get isGenerating() { return state.session?.isGenerating ?? false; },
-  get canUndo() { return (state.session?.undoStack.length ?? 0) > 0; },
-  get canRedo() { return (state.session?.redoStack.length ?? 0) > 0; },
+  get story() {
+    return state.story;
+  },
+  get session() {
+    return state.session;
+  },
+  get activePath() {
+    return activePath();
+  },
+  get activeMemories() {
+    return activeMemories();
+  },
+  get siblingLeaves() {
+    return siblingLeaves();
+  },
+  get isGenerating() {
+    return state.session?.isGenerating ?? false;
+  },
+  get canUndo() {
+    return (state.session?.undoStack.length ?? 0) > 0;
+  },
+  get canRedo() {
+    return (state.session?.redoStack.length ?? 0) > 0;
+  },
 
- 
-  open, close,
+  open,
+  close,
 
- 
-  beginTransaction, enqueue, commit, rollback, setGenerating,
+  beginTransaction,
+  enqueue,
+  commit,
+  rollback,
+  setGenerating,
 
- 
-  undo, redo, switchBranch, eraseLastMessage, editMessage,
-  editEssentials, editScriptState, editStoryMetadata, editScripts, editThumbnail,
-  addStoryCard, editStoryCard, removeStoryCard,
-  editMemory, editKvMemory
+  undo,
+  redo,
+  switchBranch,
+  eraseLastMessage,
+  editMessage,
+  editEssentials,
+  editScriptState,
+  editStoryMetadata,
+  editScripts,
+  editThumbnail,
+  addStoryCard,
+  editStoryCard,
+  removeStoryCard,
+  editMemory,
+  editKvMemory,
 };

@@ -241,7 +241,7 @@ async function generate(options: {
     activePath = sessionStore.activePath;
     activeMemories = sessionStore.activeMemories;
 
-    const defaultCtx = buildDefaultContext({
+    let defaultCtx = buildDefaultContext({
       activePath,
       activeMemories,
       storyCards: story.storyCards,
@@ -249,6 +249,38 @@ async function generate(options: {
       essentials: hookCtxs.input.essentials,
       config,
     });
+
+    if (defaultCtx.hasOverflow) {
+      onLog?.({
+        level: "warn",
+        args: [
+          `Context overflow detected. Triggering emergency summarization to compress history.`,
+        ],
+      });
+
+      const autoMemory = await summarizeHistory();
+      if (autoMemory) {
+        sessionStore.enqueue({
+          type: "memory:add",
+          memory: {
+            ...autoMemory,
+            id: crypto.randomUUID(),
+            createdAt: Date.now(),
+            editedAt: Date.now(),
+          },
+        });
+
+        activeMemories = sessionStore.activeMemories;
+        defaultCtx = buildDefaultContext({
+          activePath,
+          activeMemories,
+          storyCards: story.storyCards,
+          instructions: story.instructions,
+          essentials: hookCtxs.input.essentials,
+          config,
+        });
+      }
+    }
 
     const buildCtx = hookCtxs.buildContext(
       getCurrentStateSnapshot(),

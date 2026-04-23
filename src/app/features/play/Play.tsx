@@ -100,7 +100,7 @@ export function PlayPage() {
           <Flex class="w-full h-full">
             <Flex
               direction={"col"}
-              class="flex-1 relative gap-0 min-h-0 min-w-0"
+              class="flex-1 relative gap-0 min-h-0 min-w-0 items-center"
             >
               <Flex
                 justify={"end"}
