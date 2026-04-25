@@ -1,10 +1,11 @@
 import { Text } from "@/app/components";
 import { cn, formatRelative } from "@/utils";
 import { FiSidebar, FiCompass, FiLayers, FiBookOpen } from "solid-icons/fi";
-import { createMemo, JSX, Show } from "solid-js";
+import { Accessor, createMemo, JSX, Show } from "solid-js";
 import { useHome, View } from "./context";
 import { libraryStore, sessionStore } from "@/store";
 import { useNavigate } from "@solidjs/router";
+import { Story } from "@/core/types";
 
 interface SidebarItemProps {
   viewId: View;
@@ -52,8 +53,8 @@ function SidebarItem(props: SidebarItemProps) {
 
 function HopBackCard() {
   const { isSidebarOpen } = useHome();
-  const lastStory = createMemo(
-    () => libraryStore.items.filter((v) => v.kind === "story")[0].data,
+  const lastStory: Accessor<Story | undefined> = createMemo(
+    () => libraryStore.items.filter((v) => v.kind === "story")[0]?.data,
   );
   const navigator = useNavigate();
 

@@ -52,7 +52,7 @@ function MemoryItem(props: { memory: Memory }) {
                 {props.memory.content}
               </Text>
               <button
-                class="btn btn-ghost btn-sm btn-square opacity-0 group-hover:opacity-100 transition-opacity"
+                class="btn btn-ghost btn-lg lg:btn-sm btn-square lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                 onClick={() => setIsEditing(true)}
                 title="Edit Memory"
               >

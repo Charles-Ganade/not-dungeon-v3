@@ -53,5 +53,9 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
       "Preserve specific names, locations, and permanent changes to the world state or inventory. " +
       "Omit conversational filler and verbatim dialogue. " +
       "Respond with only the summary text — no preamble, no commentary, no markdown.",
-  }
+  },
+  Game: {
+    countInputsAsActions: false,
+    preserveTextboxOnFail: true,
+  },
 };

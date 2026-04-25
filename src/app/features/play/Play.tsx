@@ -20,7 +20,6 @@ import { OcRedo2, OcUndo2 } from "solid-icons/oc";
 import { ScriptLogEntry } from "@/core/engine/script_runner";
 import { LLMChunk } from "@/services/llm";
 import { HistoryView } from "./HistoryView";
-import { MessageInput } from "./MessageInput";
 import { PlayContext, PlayModes } from "./context";
 import { ActionRow } from "./ActionRow";
 import { Config } from "./Config";
@@ -43,7 +42,6 @@ export function PlayPage() {
     (ScriptLogEntry & { ts: number })[]
   >([]);
   const [isConfigOpen, setConfigOpen] = createSignal(false);
-  const [currentMode, setCurrentMode] = createSignal<PlayModes>("next");
 
   const isUninitialized = createMemo(() => currentStory.messages.length === 0);
   const unresolvedQuestions = createMemo(() => {
@@ -85,8 +83,6 @@ export function PlayPage() {
         onChunk,
         debugLogs,
         setDebugLogs,
-        currentMode,
-        setCurrentMode,
       }}
     >
       <Show when={isUninitialized() && hasUnresolvedQuestions()}>
@@ -151,7 +147,6 @@ export function PlayPage() {
               >
                 <div class="flex flex-col gap-2 w-full max-w-3xl">
                   <ActionRow />
-                  <MessageInput />
                 </div>
               </Flex>
             </Flex>

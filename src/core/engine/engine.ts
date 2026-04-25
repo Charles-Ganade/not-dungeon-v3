@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { sessionStore, configStore } from "@/store/";
+import { sessionStore, configStore, settingsStore } from "@/store/";
 import {
   stream as llmStream,
   createScriptStream,
@@ -228,6 +228,12 @@ async function generate(options: {
         id: finalUserMsgId!,
       });
       sessionStore.enqueue({ type: "message:add", message: finalUserMsg });
+
+      if (settingsStore.settings.Game.countInputsAsActions) {
+        sessionStore.commit();
+        sessionStore.beginTransaction(txDescription + "-Assistant");
+      }
+
       parentId = finalUserMsg.id;
 
       resolveMemoryOperations(hookCtxs.input.memoriesOperations);

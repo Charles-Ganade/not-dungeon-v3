@@ -3,23 +3,25 @@ import { LLMChunk } from "@/services/llm";
 import { Accessor, createContext, Setter, useContext } from "solid-js";
 import { SetStoreFunction, Store } from "solid-js/store";
 
-export type PlayModes = "next" | "retry" | "continue"
+export type PlayModes = "next" | "retry" | "continue";
 
 interface PlayContext {
-  currentMode: Accessor<PlayModes>;
-  setCurrentMode: Setter<PlayModes>;
   onLog: (entry: ScriptLogEntry) => void;
   onChunk: (chunk: LLMChunk) => void;
-  setDebugLogs: SetStoreFunction<{
-    level: "error" | "log" | "warn";
-    args: unknown[];
-    ts: number;
-  }[]>
-  debugLogs: Store<{
-    level: "error" | "log" | "warn";
-    args: unknown[];
-    ts: number
-  }[]>;
+  setDebugLogs: SetStoreFunction<
+    {
+      level: "error" | "log" | "warn";
+      args: unknown[];
+      ts: number;
+    }[]
+  >;
+  debugLogs: Store<
+    {
+      level: "error" | "log" | "warn";
+      args: unknown[];
+      ts: number;
+    }[]
+  >;
 }
 
 export const PlayContext = createContext<PlayContext>();

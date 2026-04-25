@@ -8,6 +8,7 @@ import { APIPanel } from "./panels/ApiPanel";
 import { ParametersPanel } from "./panels/ParametersPanel";
 import { PromptsPanel } from "./panels/PromptsPanel";
 import { UiPanel } from "./panels/UiPanel";
+import { GamePanel } from "./panels/GamePanel";
 
 interface SettingsProps {
   open: () => boolean;
@@ -19,6 +20,7 @@ const GLOBAL_SETTING_KEYS: (keyof GlobalSettings)[] = [
   "API",
   "Parameters",
   "Prompts",
+  "Game",
 ];
 
 const PATCH_DEBOUNCE_DURATION = 1000;
@@ -92,6 +94,14 @@ export function Settings(props: SettingsProps) {
             )}
           >
             <UiPanel />
+          </div>
+          <div
+            class={cn(
+              "flex-1 flex w-full min-h-0",
+              currentSettingsTab() !== "Game" && "hidden",
+            )}
+          >
+            <GamePanel />
           </div>
         </Box>
       </div>
