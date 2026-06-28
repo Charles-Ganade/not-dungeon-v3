@@ -11,6 +11,12 @@ export interface ContextBuilderInput {
   instructions: string;
   essentials: string;
   config: ResolvedConfig;
+  /**
+   * System-role messages produced by an input hook's `ctx.inject(...)`.
+   * Inserted directly after the default system message and counted in
+   * the token budget. Defaults to none.
+   */
+  injectedMessages?: LLMMessage[];
 }
 
 export interface ContextBuilderOutput {
@@ -93,9 +99,22 @@ export function truncateToFit(
 ): { truncated: LLMMessage[]; removedCount: number } {
   if (messages.length <= 1) return { truncated: messages, removedCount: 0 };
 
-  const systemMsg = messages[0];
-  const historyMsgs = messages.slice(1);
-  let currentTokens = estimateTokens(systemMsg.content);
+  // Preserve the leading run of system messages — the default system prompt
+  // plus any hook-injected system messages. These are high-priority header
+  // context and must never be dropped to make room for history.
+  let headerEnd = 0;
+  while (headerEnd < messages.length && messages[headerEnd].role === "system") {
+    headerEnd++;
+  }
+  if (headerEnd === 0) headerEnd = 1;
+
+  const header = messages.slice(0, headerEnd);
+  const historyMsgs = messages.slice(headerEnd);
+
+  let currentTokens = header.reduce(
+    (sum, msg) => sum + estimateTokens(msg.content),
+    0,
+  );
   let removedCount = 0;
 
   const keptHistory: LLMMessage[] = [];
@@ -117,7 +136,7 @@ export function truncateToFit(
   }
 
   return {
-    truncated: [systemMsg, ...keptHistory],
+    truncated: [...header, ...keptHistory],
     removedCount,
   };
 }
@@ -268,6 +287,7 @@ export function buildDefaultContext(
     instructions,
     essentials,
   } = input;
+  const injectedMessages = input.injectedMessages ?? [];
 
   const validatedMemories = validateActiveMemories(activeMemories, activePath);
   const triggerWindow = resolveTriggerWindow(
@@ -319,6 +339,9 @@ export function buildDefaultContext(
 
   const systemMsg = systemParts.join("\n\n");
   let currentEstimate = estimateTokens(systemMsg);
+  for (const msg of injectedMessages) {
+    currentEstimate += estimateTokens(msg.content);
+  }
   for (const msg of historyMessages) {
     currentEstimate += estimateTokens(msg.content);
   }
@@ -347,10 +370,14 @@ export function buildDefaultContext(
 
   let messages: LLMMessage[] = [
     { role: "system", content: systemMsg },
+    ...injectedMessages,
     ...historyMessages,
   ];
 
   let estimatedTokens = estimateTokens(systemMsg);
+  for (const msg of injectedMessages) {
+    estimatedTokens += estimateTokens(msg.content);
+  }
   for (const msg of historyMessages) {
     estimatedTokens += estimateTokens(msg.content);
   }
@@ -359,8 +386,6 @@ export function buildDefaultContext(
     estimatedTokens,
     config.params.contextWindow,
   );
-
-  console.log(fitResult, estimatedTokens);
 
   let truncatedMessageCount = 0;
 

@@ -8,11 +8,13 @@ import {
 } from "solid-js";
 import { cn, formatRelative } from "@/utils";
 import { Text } from "@/app/components";
-import { FiPlay, FiTrash2 } from "solid-icons/fi";
+import { FiPlay, FiTrash2, FiDownload } from "solid-icons/fi";
 import type { Story } from "@/core/types/stories";
 import type { Scenario } from "@/core/types/scenarios";
 import { BsPencil } from "solid-icons/bs";
 import { getThumbnailUrl } from "@/services/db";
+import { exportStoryBundle } from "@/core/utils/storyIO";
+import { toast } from "solid-sonner";
 import { DeleteStoryModal } from "./modals/DeleteStoryModal";
 import { EditStoryModal } from "./modals/EditStoryModal";
 import { A } from "@solidjs/router";
@@ -39,6 +41,21 @@ export function StoryCard(props: StoryCardProps) {
     const url = thumbUrl();
     if (url) URL.revokeObjectURL(url);
   });
+
+  const handleExport = async (e: MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const file = await exportStoryBundle(props.story);
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
   return (
     <>
       <DeleteStoryModal
@@ -102,6 +119,13 @@ export function StoryCard(props: StoryCardProps) {
                 title="Delete"
               >
                 <FiTrash2 />
+              </button>
+              <button
+                class="btn btn-ghost btn-sm btn-square text-base-content/70"
+                onClick={handleExport}
+                title="Export story"
+              >
+                <FiDownload />
               </button>
               <button
                 class="btn btn-ghost btn-sm btn-square text-base-content/70"

@@ -8,11 +8,28 @@ import { StoriesView } from "./views/StoriesView";
 import { BsPlayFill } from "solid-icons/bs";
 import { createSignal } from "solid-js";
 import { CreateStoryModal } from "./modals/CreateStoryModal";
-import { FiPlus, FiX } from "solid-icons/fi";
+import { FiPlus, FiX, FiUpload } from "solid-icons/fi";
+import { importStoryBundle } from "@/core/utils/storyIO";
+import { libraryStore } from "@/store";
+import { toast } from "solid-sonner";
 
 export function Content() {
   const { currentView } = useHome();
   const [isQuickStartOpen, setQuickStartopen] = createSignal(false);
+
+  const handleImportStory = async (e: { currentTarget: HTMLInputElement }) => {
+    const input = e.currentTarget;
+    const file = input.files?.[0] ?? null;
+    input.value = "";
+    if (!file) return;
+    try {
+      const { story, thumbnailBlob } = await importStoryBundle(await file.text());
+      await libraryStore.addStory(story, thumbnailBlob ?? undefined);
+      toast.success(`Imported story "${story.name}".`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
 
   return (
     <>
@@ -64,6 +81,18 @@ export function Content() {
             </Text>
             <Text>QuickStart</Text>
           </button>
+          <label class="btn btn-lg">
+            <Text variant={"h3"}>
+              <FiUpload />
+            </Text>
+            <Text>Import Story</Text>
+            <input
+              type="file"
+              class="hidden"
+              accept="application/json,.json"
+              onChange={handleImportStory}
+            />
+          </label>
         </div>
       </Flex>
       <CreateStoryModal

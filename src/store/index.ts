@@ -2,6 +2,7 @@ import { settingsStore } from "./settings";
 import { libraryStore } from "./library";
 import { sessionStore } from "./session";
 import { configStore } from "./config";
+import { pluginsStore } from "./plugins";
 
 /**
  * Initializes all stores that require async DB reads.
@@ -16,7 +17,8 @@ export async function initStores(): Promise<void> {
   await Promise.all([
     settingsStore.init(),
     libraryStore.init(),
+    pluginsStore.init(),
   ]);
 }
 
-export { sessionStore, libraryStore, settingsStore, configStore };
+export { sessionStore, libraryStore, settingsStore, configStore, pluginsStore };

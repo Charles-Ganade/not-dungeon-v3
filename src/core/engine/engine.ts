@@ -1,10 +1,13 @@
 import { createSignal } from "solid-js";
-import { sessionStore, configStore, settingsStore } from "@/store/";
+import { sessionStore, configStore, settingsStore, pluginsStore } from "@/store/";
+import { resolvePluginConfig } from "@/core/utils/pluginIO";
+import type { InstalledPlugin } from "@/core/types/plugins";
 import {
   stream as llmStream,
   createScriptStream,
   LLMChunk,
   LLMMessage,
+  ScriptStream,
 } from "@/services/llm";
 import { buildDefaultContext } from "./context_builder";
 import {
@@ -12,6 +15,7 @@ import {
   runScript,
   createHookContexts,
   ScriptLogEntry,
+  ScriptTimeoutError,
   MemoryOperations,
   StoryCardOperations,
 } from "./script_runner";
@@ -158,17 +162,81 @@ async function generate(options: {
     story,
   );
 
-  const scriptStream = createScriptStream(
-    config.providerId,
-    config.endpoint,
-    config.apiKey,
-    config.model,
-    {
-      model: config.model,
-      params: config.params,
-    },
+  const makeScriptStream = (streamSignal: AbortSignal): ScriptStream =>
+    createScriptStream(
+      config.providerId,
+      config.endpoint,
+      config.apiKey,
+      config.model,
+      {
+        model: config.model,
+        params: config.params,
+      },
+      streamSignal,
+    );
+
+  const scriptStream = makeScriptStream(signal);
+
+  const scriptRunOptions = (phase: "input" | "buildContext" | "output") => ({
     signal,
-  );
+    phase,
+    idleMs: settingsStore.settings.Scripts.idleTimeoutMs,
+    ceilingMs: settingsStore.settings.Scripts.maxTimeoutMs,
+    makeScriptStream,
+  });
+
+  // Resolve the story's enabled plugins against the installed set once for the
+  // whole turn (so a missing plugin is logged only once, not per phase).
+  const pluginRuns = (story.enabledPlugins ?? [])
+    .filter((e) => e.enabled)
+    .map((e) => {
+      const manifest = pluginsStore.installed.find((p) => p.id === e.pluginId);
+      if (!manifest) {
+        onLog?.({
+          level: "warn",
+          args: [`Enabled plugin "${e.pluginId}" is not installed; skipping.`],
+        });
+        return null;
+      }
+      return { manifest, config: resolvePluginConfig(manifest, e) };
+    })
+    .filter(
+      (r): r is { manifest: InstalledPlugin; config: Record<string, unknown> } =>
+        r !== null,
+    );
+
+  /**
+   * Runs one hook phase: the scenario/story script first, then each enabled
+   * plugin in order (the outer layer). State threads through the shared
+   * `hookCtx` via runScript's write-back; each plugin sees its own
+   * `ctx.pluginConfig`. Stops early if a script halts/cancels the turn.
+   * Errors (incl. ScriptTimeoutError) propagate to the caller.
+   */
+  const runPhaseWithPlugins = async (
+    phase: "input" | "buildContext" | "output",
+    library: string,
+    hookScript: string,
+    hookCtx: Record<string, unknown>,
+  ): Promise<void> => {
+    await runScript(library, hookScript, hookCtx, scriptRunOptions(phase));
+
+    for (const run of pluginRuns) {
+      if (hookCtxs.stopFlag.stopped || hookCtxs.stopFlag.canceled) break;
+      const code = run.manifest.hooks[phase];
+      if (!code || !code.trim()) continue;
+      hookCtx.pluginConfig = run.config;
+      try {
+        await runScript(
+          run.manifest.hooks.library ?? "",
+          code,
+          hookCtx,
+          scriptRunOptions(phase),
+        );
+      } finally {
+        hookCtx.pluginConfig = undefined;
+      }
+    }
+  };
 
   let activePath = sessionStore.activePath;
   let activeMemories = sessionStore.activeMemories;
@@ -194,7 +262,8 @@ async function generate(options: {
     if (userMsg) {
       const prevEssentials = story.essentials;
       const prevScriptState = story.scriptState;
-      await runScript(
+      await runPhaseWithPlugins(
+        "input",
         scriptBundle.library,
         scriptBundle.input,
         hookCtxs.input as unknown as Record<string, unknown>,
@@ -254,6 +323,7 @@ async function generate(options: {
       instructions: story.instructions,
       essentials: hookCtxs.input.essentials,
       config,
+      injectedMessages: hookCtxs.input._injected,
     });
 
     if (defaultCtx.hasOverflow) {
@@ -284,6 +354,7 @@ async function generate(options: {
           instructions: story.instructions,
           essentials: hookCtxs.input.essentials,
           config,
+          injectedMessages: hookCtxs.input._injected,
         });
       }
     }
@@ -297,7 +368,8 @@ async function generate(options: {
       hookCtxs.input.scriptState,
     );
 
-    await runScript(
+    await runPhaseWithPlugins(
+      "buildContext",
       scriptBundle.library,
       scriptBundle.buildContext,
       buildCtx as unknown as Record<string, unknown>,
@@ -389,19 +461,38 @@ async function generate(options: {
       buildCtx.essentials,
       buildCtx.scriptState,
     );
-    await runScript(
-      scriptBundle.library,
-      scriptBundle.output,
-      outputCtx as unknown as Record<string, unknown>,
-    );
+    // If the output hook times out, the model response has already streamed,
+    // so we keep that raw output and skip the hook's pending mutations rather
+    // than discarding the whole (already-paid-for) turn.
+    let outputTimedOut = false;
+    try {
+      await runPhaseWithPlugins(
+        "output",
+        scriptBundle.library,
+        scriptBundle.output,
+        outputCtx as unknown as Record<string, unknown>,
+      );
+    } catch (err) {
+      if (err instanceof ScriptTimeoutError) {
+        outputTimedOut = true;
+        onLog?.({
+          level: "warn",
+          args: [
+            `Output hook timed out (${err.kind}, ${err.limitMs}ms). Keeping the raw model output and skipping the hook's pending changes.`,
+          ],
+        });
+      } else {
+        throw err;
+      }
+    }
 
-    if (hookCtxs.stopFlag.canceled) {
+    if (!outputTimedOut && hookCtxs.stopFlag.canceled) {
       clearStreaming();
       sessionStore.rollback();
       return;
     }
 
-    if (outputCtx.essentials !== buildCtx.essentials) {
+    if (!outputTimedOut && outputCtx.essentials !== buildCtx.essentials) {
       sessionStore.enqueue({
         type: "essentials:edit",
         prev: buildCtx.essentials,
@@ -409,7 +500,7 @@ async function generate(options: {
       });
     }
 
-    if (outputCtx.scriptState !== buildCtx.scriptState) {
+    if (!outputTimedOut && outputCtx.scriptState !== buildCtx.scriptState) {
       sessionStore.enqueue({
         type: "scriptState:edit",
         prev: buildCtx.scriptState,
@@ -424,7 +515,7 @@ async function generate(options: {
     const assistantMsg = newMessage({
       id: assistantMsgId,
       role: "assistant",
-      text: outputCtx.output,
+      text: outputTimedOut ? accText : outputCtx.output,
       parentId,
       thinkingBlocks,
       steeringNotes: notes,
@@ -432,10 +523,12 @@ async function generate(options: {
 
     sessionStore.enqueue({ type: "message:add", message: assistantMsg });
 
-    resolveMemoryOperations(outputCtx.memoriesOperations);
-    resolveStoryOperations(outputCtx.storyCardOperations);
+    if (!outputTimedOut) {
+      resolveMemoryOperations(outputCtx.memoriesOperations);
+      resolveStoryOperations(outputCtx.storyCardOperations);
+    }
 
-    if (hookCtxs.stopFlag.stopped) {
+    if (!outputTimedOut && hookCtxs.stopFlag.stopped) {
       sessionStore.commit();
       return;
     }
@@ -460,6 +553,19 @@ async function generate(options: {
     clearStreaming();
     if (sessionStore.session?.pendingTransactionId) {
       sessionStore.rollback();
+    }
+    if (err instanceof ScriptTimeoutError) {
+      onLog?.({
+        level: "error",
+        args: [
+          `Script ${err.phase} hook timed out (${err.kind}, ${err.limitMs}ms). Turn discarded.`,
+        ],
+      });
+      return;
+    }
+    if (err instanceof DOMException && err.name === "AbortError") {
+      // Turn cancelled by the user — already rolled back, stay silent.
+      return;
     }
     throw err;
   } finally {

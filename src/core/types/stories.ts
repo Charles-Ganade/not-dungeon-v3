@@ -1,4 +1,5 @@
 import type { ModelParams, PromptSettings } from "./settings";
+import type { EnabledPlugin } from "./plugins";
 
 /**
  * The four "files" shown in the scripts panel.
@@ -209,6 +210,13 @@ export interface Story {
    * first, then story.library.
    */
   scripts: Partial<ScriptBundle>;
+
+  /**
+   * Plugins this story has opted into, with per-story config. Each
+   * references a globally-installed plugin by id and runs after the
+   * scenario/story scripts. Not delta-tracked (configuration).
+   */
+  enabledPlugins?: EnabledPlugin[];
 
   override: ConfigOverride;
 

@@ -15,6 +15,23 @@ export interface GameSettings {
   preserveTextboxOnFail: boolean;
 }
 
+export interface ScriptSettings {
+  /**
+   * Max milliseconds a hook may run with no observable progress before it
+   * is timed out. The idle timer is paused while a `ctx.ai` call is in
+   * flight (model latency is unbounded), so this guards stuck compute /
+   * infinite loops, not slow model calls.
+   */
+  idleTimeoutMs: number;
+
+  /**
+   * Absolute ceiling (ms) for a single hook, including any model calls it
+   * makes. Backstops a script that holds an AI call open or otherwise never
+   * makes progress the idle timer can see.
+   */
+  maxTimeoutMs: number;
+}
+
 export interface APISettings {
   providerId: string;
   /** Base URL of any OpenAI-compatible endpoint. e.g. "https://api.openai.com/v1" */
@@ -94,4 +111,5 @@ export interface GlobalSettings {
   Parameters: ModelParams;
   Prompts: PromptSettings;
   Game: GameSettings;
+  Scripts: ScriptSettings;
 }

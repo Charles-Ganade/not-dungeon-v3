@@ -45,27 +45,80 @@ export function mergeScriptBundle(
   };
 }
 
-const SCRIPT_TIMEOUT_MS = 5000;
+export type ScriptPhase = "input" | "buildContext" | "output";
+
+/**
+ * Thrown when a hook exceeds its idle or absolute (ceiling) time budget.
+ * The engine distinguishes this from a script throw to decide whether to
+ * discard the turn or keep the already-streamed output.
+ */
+export class ScriptTimeoutError extends Error {
+  constructor(
+    public readonly phase: ScriptPhase,
+    public readonly kind: "idle" | "ceiling",
+    public readonly limitMs: number,
+  ) {
+    super(`Script ${phase} hook timed out (${kind}, ${limitMs}ms)`);
+    this.name = "ScriptTimeoutError";
+  }
+}
+
+export interface RunScriptOptions {
+  /** The turn's abort signal. When it fires, the worker is torn down. */
+  signal: AbortSignal;
+  /** Which hook is running — used for error reporting. */
+  phase: ScriptPhase;
+  /**
+   * Max ms with no observable progress before timing out. Paused while a
+   * `ctx.ai` call is in flight, so slow model calls are never killed.
+   */
+  idleMs: number;
+  /** Absolute ceiling (ms) for the whole hook, including model calls. */
+  ceilingMs: number;
+  /**
+   * Builds a ScriptStream bound to a per-script signal, so a timeout or a
+   * cancel actually aborts the underlying LLM request.
+   */
+  makeScriptStream: (signal: AbortSignal) => ScriptStream;
+}
+
+function abortError(): DOMException {
+  return new DOMException("Aborted", "AbortError");
+}
+
+/**
+ * How often the host watchdog re-evaluates the idle/ceiling budgets.
+ * The check runs on the main thread, which the worker can never block.
+ */
+const WATCHDOG_INTERVAL_MS = 250;
 
 /**
  * Executes a hook script string with the given context object.
  * The library string is prepended so library-defined names are
  * available. Empty scripts are a no-op.
  *
- * Throws if the script exceeds SCRIPT_TIMEOUT_MS or throws itself.
+ * Throws ScriptTimeoutError if the hook exceeds its idle/ceiling budget,
+ * AbortError if the turn is cancelled, or whatever the script itself throws.
  */
 export async function runScript(
   library: string,
   hookScript: string,
-  ctx: Record<string, any>
+  ctx: Record<string, any>,
+  options: RunScriptOptions,
 ): Promise<void> {
   if (!hookScript.trim()) return;
 
- 
+  const { signal, phase, idleMs, ceilingMs, makeScriptStream } = options;
+  if (signal.aborted) throw abortError();
+
   const worker = new ScriptWorker();
   const api = Comlink.wrap<RunnerApi>(worker);
 
- 
+  // Per-script abort, tripped by the turn signal (user cancel) or a timeout.
+  // The script's AI calls bind to it, so an in-flight LLM fetch is aborted.
+  const scriptAbort = new AbortController();
+  const scriptStream = makeScriptStream(scriptAbort.signal);
+
   const ctxData = {
     state: ctx.state,
     config: ctx.config,
@@ -80,21 +133,30 @@ export async function runScript(
     rawOutput: ctx.rawOutput,
     suppressDefaultSummarizer: ctx.suppressDefaultSummarizer,
     kvMemoryData: ctx.kvMemory?.all() || {},
-    _injected: ctx._injected || []
+    _injected: ctx._injected || [],
+    pluginConfig: ctx.pluginConfig ?? null,
   };
 
   const streamHandlers = new Map<string, AsyncIterator<any>>();
 
- 
+  // Progress tracking for the idle watchdog. Any worker→host callback counts
+  // as activity; AI calls pause the idle timer until they finish streaming.
+  const startedAt = Date.now();
+  let lastActivityAt = startedAt;
+  let activeAiCalls = 0;
+  const bump = () => { lastActivityAt = Date.now(); };
+
   const callbacks: SandboxCallbacks = {
-    log: (...args) => ctx.console?.log(...args),
-    warn: (...args) => ctx.console?.warn(...args),
-    error: (...args) => ctx.console?.error(...args),
+    log: (...args) => { bump(); ctx.console?.log(...args); },
+    warn: (...args) => { bump(); ctx.console?.warn(...args); },
+    error: (...args) => { bump(); ctx.console?.error(...args); },
     stop: (reason) => ctx.stop?.(reason),
     cancel: (reason) => ctx.cancel?.(reason),
     startStream: async (input) => {
+      bump();
+      activeAiCalls++;
       const id = crypto.randomUUID();
-      const iterable = ctx.ai.stream(input);
+      const iterable = scriptStream(input);
       streamHandlers.set(id, iterable[Symbol.asyncIterator]());
       return id;
     },
@@ -102,24 +164,41 @@ export async function runScript(
       const iterator = streamHandlers.get(id);
       if (!iterator) return { done: true, value: undefined };
       const res = await iterator.next();
-      if (res.done) streamHandlers.delete(id);
+      bump();
+      if (res.done) {
+        streamHandlers.delete(id);
+        activeAiCalls = Math.max(0, activeAiCalls - 1);
+      }
       return res;
     }
   };
 
   const proxyCallbacks = Comlink.proxy(callbacks);
 
-  try {
-    const resultPromise = api.execute(library, hookScript, unwrap(ctxData), proxyCallbacks);
-    
-    const result = await Promise.race([
-      resultPromise,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Script timed out after ${SCRIPT_TIMEOUT_MS}ms`)), SCRIPT_TIMEOUT_MS)
-      ),
-    ]);
+  let watchdog: ReturnType<typeof setInterval> | undefined;
+  let onAbort: (() => void) | undefined;
 
-   
+  try {
+    const execution = api.execute(library, hookScript, unwrap(ctxData), proxyCallbacks);
+
+    const timeout = new Promise<never>((_, reject) => {
+      watchdog = setInterval(() => {
+        const now = Date.now();
+        if (now - startedAt > ceilingMs) {
+          reject(new ScriptTimeoutError(phase, "ceiling", ceilingMs));
+        } else if (activeAiCalls === 0 && now - lastActivityAt > idleMs) {
+          reject(new ScriptTimeoutError(phase, "idle", idleMs));
+        }
+      }, WATCHDOG_INTERVAL_MS);
+    });
+
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () => reject(abortError());
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+
+    const result = await Promise.race([execution, timeout, aborted]);
+
     if (result.essentials !== undefined) ctx.essentials = result.essentials;
     if (result.scriptState !== undefined) ctx.scriptState = result.scriptState;
     if (result.input !== undefined) ctx.input = result.input;
@@ -128,7 +207,6 @@ export async function runScript(
     if (result.suppressDefaultSummarizer !== undefined) ctx.suppressDefaultSummarizer = result.suppressDefaultSummarizer;
     if (result._injected !== undefined) (ctx as any)._injected = result._injected;
 
-   
     if (result.memoriesOperations && ctx.memoriesOperations) {
         ctx.memoriesOperations.add.push(...result.memoriesOperations.add);
         ctx.memoriesOperations.edit.push(...result.memoriesOperations.edit);
@@ -149,6 +227,15 @@ export async function runScript(
     }
 
   } finally {
+    if (watchdog !== undefined) clearInterval(watchdog);
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+    // Abort any LLM fetch this script started and release host iterators,
+    // then kill the worker. Safe to call on the normal-completion path too.
+    scriptAbort.abort();
+    for (const iterator of streamHandlers.values()) {
+      iterator.return?.(undefined);
+    }
+    streamHandlers.clear();
     worker.terminate();
   }
 }
@@ -205,6 +292,12 @@ export interface MemoryOperations {
 export interface HookContexts {
   input: InputHookContext & {
     memoriesOperations: MemoryOperations;
+    /**
+     * System messages collected by `ctx.inject(...)` during the input hook.
+     * Populated by the worker and read by the engine, which splices them
+     * into the request after the default system prompt.
+     */
+    _injected: ContextMessage[];
   };
   buildContext: (
     state: {
@@ -249,9 +342,8 @@ export function createHookContexts(params: {
   assistantMsgId: string;
   userMsgId: string | null;
 }): HookContexts {
-  
   const { inputText, story, activePath, activeMemories, config, scriptStream } = params;
- 
+
   const stopFlag = makeStopFlag();
   const logEntries: ScriptLogEntry[] = [];
   const logger = makeLogger(logEntries, params.onLog);
@@ -316,19 +408,16 @@ export function createHookContexts(params: {
     }
   };
 
+  const injectedMessages: ContextMessage[] = [];
   const inputCtx = {
     ...base,
     input: inputText,
-    inject: (_text: string) => {
+    inject: (text: string) => {
+      injectedMessages.push({ role: "system", content: text });
     },
-    ...memoryOperationsBuilder(base.state)
+    _injected: injectedMessages,
+    ...memoryOperationsBuilder(base.state),
   };
-
-  const injectedMessages: ContextMessage[] = [];
-  inputCtx.inject = (text: string) => {
-    injectedMessages.push({ role: "system", content: text });
-  };
-  (inputCtx as unknown as { _injected: ContextMessage[] })._injected = injectedMessages;
 
   const buildContextFn = (
     state: {

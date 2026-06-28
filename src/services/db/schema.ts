@@ -2,6 +2,7 @@ import Dexie, { type Table } from "dexie";
 import type { GlobalSettings } from "@/core/types/settings";
 import type { Scenario } from "@/core/types/scenarios";
 import type { Story } from "@/core/types/stories";
+import type { InstalledPlugin } from "@/core/types/plugins";
 
 interface SettingsRow {
   id: "global";
@@ -18,6 +19,7 @@ class AppDatabase extends Dexie {
   scenarios!: Table<Scenario, string>;
   stories!: Table<Story, string>;
   thumbnails!: Table<ThumbnailRow, string>;
+  plugins!: Table<InstalledPlugin, string>;
 
   constructor() {
     super("not-dungeon");
@@ -27,6 +29,11 @@ class AppDatabase extends Dexie {
       scenarios: "id, *tags, createdAt, updatedAt, thumbnailId",
       stories: "id, scenarioId, lastPlayedAt, createdAt, thumbnailId",
       thumbnails: "id",
+    });
+
+    // v3 adds the global plugins table; existing tables carry forward.
+    this.version(3).stores({
+      plugins: "id, name, installedAt",
     });
   }
 }

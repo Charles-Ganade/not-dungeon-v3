@@ -63,30 +63,29 @@ export type ScriptStream = (
 ) => AsyncIterable<LLMChunk>;
 
 export enum LLMErrorCode {
- 
+  // Network / transport
   NetworkError = "NETWORK_ERROR",
   Timeout = "TIMEOUT",
   Aborted = "ABORTED",
 
- 
+  // Authentication
   Unauthorized = "UNAUTHORIZED",
   Forbidden = "FORBIDDEN",
 
- 
+  // Quota / rate limiting
   RateLimited = "RATE_LIMITED",
   InsufficientQuota = "INSUFFICIENT_QUOTA",
 
- 
+  // Request / model
   InvalidRequest = "INVALID_REQUEST",
   ContextLengthExceeded = "CONTEXT_LENGTH_EXCEEDED",
   ModelNotFound = "MODEL_NOT_FOUND",
 
- 
+  // Provider
   ProviderError = "PROVIDER_ERROR",
   ProviderUnavailable = "PROVIDER_UNAVAILABLE",
 
- 
+  // Fallthrough
   UnknownProvider = "UNKNOWN_PROVIDER",
-
   Unknown = "UNKNOWN",
 }

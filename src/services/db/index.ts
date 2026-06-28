@@ -22,3 +22,12 @@ export {
 } from "./stories";
 
 export * from "./thumbnails"
+
+export { exportBackup, importBackup } from "./backup";
+
+export {
+  getAllPlugins,
+  getPlugin,
+  installPlugin,
+  uninstallPlugin,
+} from "./plugins";

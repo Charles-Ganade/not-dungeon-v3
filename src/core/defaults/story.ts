@@ -22,6 +22,7 @@ export function makeDefaultStory(
     memories: [],
     storyCards: [],
     scripts:  {},
+    enabledPlugins: [],
     override: { prompts: {} },
     createdAt: now,
     updatedAt: now,

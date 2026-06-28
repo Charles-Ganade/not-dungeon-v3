@@ -1,5 +1,81 @@
 import * as Comlink from "comlink";
 
+/**
+ * Sandbox lockdown. Runs once when this worker module loads, before any user
+ * script can execute. It neutralizes the worker's own network/IO surface on
+ * the real global, so even a sandbox escape (e.g.
+ * `[].constructor.constructor("return self")()`) resolves to a neutered global.
+ *
+ * `ctx.ai` is unaffected — it reaches the model through main-thread Comlink
+ * callbacks (postMessage), not through any of these APIs. Comlink's own
+ * transport (postMessage / addEventListener) is intentionally left intact.
+ */
+const BLOCKED_GLOBALS = [
+  "fetch",
+  "XMLHttpRequest",
+  "WebSocket",
+  "EventSource",
+  "importScripts",
+  "indexedDB",
+  "caches",
+  "Worker",
+  "SharedWorker",
+] as const;
+
+function lockdownSandbox(): void {
+  const g = globalThis as Record<string, unknown>;
+
+  for (const name of BLOCKED_GLOBALS) {
+    const blocked = () => {
+      throw new Error(`${name} is disabled in the script sandbox`);
+    };
+    try {
+      Object.defineProperty(g, name, {
+        configurable: false,
+        writable: false,
+        value: blocked,
+      });
+    } catch {
+      try {
+        g[name] = blocked;
+      } catch {
+        // Non-writable host binding — already inaccessible, leave as-is.
+      }
+    }
+  }
+
+  // navigator.sendBeacon is a separate exfiltration channel.
+  try {
+    const nav = g.navigator as { sendBeacon?: unknown } | undefined;
+    if (nav && typeof nav.sendBeacon === "function") {
+      Object.defineProperty(nav, "sendBeacon", {
+        configurable: false,
+        writable: false,
+        value: () => {
+          throw new Error("navigator.sendBeacon is disabled in the script sandbox");
+        },
+      });
+    }
+  } catch {
+    // Ignore — navigator or sendBeacon unavailable.
+  }
+}
+
+lockdownSandbox();
+
+/**
+ * Identifiers shadowed as `undefined` parameters when compiling user code, so
+ * a bare reference (e.g. `fetch(...)`, `self`) can't reach the already-neutered
+ * real global. Defense in depth on top of lockdownSandbox().
+ */
+const SHADOWED_GLOBALS = [
+  "window",
+  "document",
+  "globalThis",
+  "self",
+  ...BLOCKED_GLOBALS,
+] as const;
+
 export interface SandboxCallbacks {
   log: (...args: any[]) => void;
   warn: (...args: any[]) => void;
@@ -83,8 +159,18 @@ const runnerApi = {
       inject: (text: string) => {
         if (!ctx._injected) ctx._injected = [];
         ctx._injected.push({ role: "system", content: text });
-      }
+      },
+      // Read-only resolved config for the running plugin ({} for
+      // scenario/story scripts, which aren't plugins).
+      pluginConfig: Object.freeze(ctxData.pluginConfig ?? {}),
     };
+
+    // Freeze the capability surfaces so scripts can't swap them out to
+    // intercept other hooks' calls. `ctx` itself stays mutable — scripts
+    // assign ctx.input / ctx.output / ctx.essentials / etc.
+    Object.freeze(ctx.console);
+    Object.freeze(ctx.ai);
+    Object.freeze(ctx.kvMemory);
 
     const code = [library, hookScript].filter(Boolean).join("\n\n");
     const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -92,7 +178,7 @@ const runnerApi = {
     let fn;
     try {
       fn = new AsyncFunction(
-        "ctx", "window", "document", "globalThis", "self", "fetch", "XMLHttpRequest", "indexedDB", "Worker", "WebSocket", "caches",
+        "ctx", ...SHADOWED_GLOBALS,
         `"use strict";\n${code}`
       );
     } catch (err) {
@@ -101,7 +187,7 @@ const runnerApi = {
     }
 
     try {
-      await fn(ctx, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+      await fn(ctx, ...SHADOWED_GLOBALS.map(() => undefined));
     } catch (err) {
       callbacks.error(`[Script Runtime Error] ${(err as Error).message}`);
     }

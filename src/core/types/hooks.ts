@@ -113,8 +113,10 @@ export interface InputHookContext extends BaseHookContext {
 
   /**
    * Injects a system-role message into the request's messages array.
-   * The injected message bypasses the normal context composition and
-   * is appended after the default system prompt.
+   * The message bypasses normal context composition and is inserted
+   * directly after the default system prompt. It is counted in the
+   * token budget and is visible (and editable) in `buildContext.js`
+   * via `ctx.messages`.
    */
   inject(text: string): void;
 }

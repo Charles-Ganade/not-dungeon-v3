@@ -58,4 +58,9 @@ export const DEFAULT_SETTINGS: GlobalSettings = {
     countInputsAsActions: false,
     preserveTextboxOnFail: true,
   },
+
+  Scripts: {
+    idleTimeoutMs: 15_000,
+    maxTimeoutMs: 180_000,
+  },
 };

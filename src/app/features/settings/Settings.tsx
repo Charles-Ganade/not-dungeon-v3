@@ -9,18 +9,27 @@ import { ParametersPanel } from "./panels/ParametersPanel";
 import { PromptsPanel } from "./panels/PromptsPanel";
 import { UiPanel } from "./panels/UiPanel";
 import { GamePanel } from "./panels/GamePanel";
+import { ScriptsPanel } from "./panels/ScriptsPanel";
+import { DataPanel } from "./panels/DataPanel";
+import { PluginsPanel } from "./panels/PluginsPanel";
 
 interface SettingsProps {
   open: () => boolean;
   onClose: () => void;
 }
 
-const GLOBAL_SETTING_KEYS: (keyof GlobalSettings)[] = [
+/** Settings tabs: the stored GlobalSettings sections plus action-only tabs. */
+type SettingsTab = keyof GlobalSettings | "Plugins" | "Data";
+
+const GLOBAL_SETTING_KEYS: SettingsTab[] = [
   "UI",
   "API",
   "Parameters",
   "Prompts",
   "Game",
+  "Scripts",
+  "Plugins",
+  "Data",
 ];
 
 const PATCH_DEBOUNCE_DURATION = 1000;
@@ -31,7 +40,7 @@ export const debouncedPatch = debounce(
 
 export function Settings(props: SettingsProps) {
   const [currentSettingsTab, setCurrentSettingsTab] =
-    createSignal<keyof GlobalSettings>("UI");
+    createSignal<SettingsTab>("UI");
   return (
     <Modal
       open={props.open()}
@@ -102,6 +111,30 @@ export function Settings(props: SettingsProps) {
             )}
           >
             <GamePanel />
+          </div>
+          <div
+            class={cn(
+              "flex-1 flex w-full min-h-0",
+              currentSettingsTab() !== "Scripts" && "hidden",
+            )}
+          >
+            <ScriptsPanel />
+          </div>
+          <div
+            class={cn(
+              "flex-1 flex w-full min-h-0",
+              currentSettingsTab() !== "Plugins" && "hidden",
+            )}
+          >
+            <PluginsPanel />
+          </div>
+          <div
+            class={cn(
+              "flex-1 flex w-full min-h-0",
+              currentSettingsTab() !== "Data" && "hidden",
+            )}
+          >
+            <DataPanel />
           </div>
         </Box>
       </div>

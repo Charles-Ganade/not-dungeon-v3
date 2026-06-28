@@ -9,6 +9,7 @@ import { StoryCardPanel } from "./configPanels/StoryCardPanel";
 import { PlotPanel } from "./configPanels/PlotPanel";
 import { StoryPanel } from "./configPanels/StoryPanel";
 import { MemoriesPanel } from "./configPanels/MemoriesPanel";
+import { PluginsPanel } from "./configPanels/PluginsPanel";
 
 interface SettingsProps {
   open: () => boolean;
@@ -21,6 +22,7 @@ const CONFIG_TABS = [
   "Story Cards",
   "Memories",
   "Scripts",
+  "Plugins",
   "Debug Panel",
 ] as const;
 
@@ -103,6 +105,14 @@ export function Config(props: SettingsProps) {
             )}
           >
             <ScriptsPanel />
+          </div>
+          <div
+            class={cn(
+              "flex-1 flex min-h-0",
+              currentConfigTab() !== "Plugins" && "hidden",
+            )}
+          >
+            <PluginsPanel />
           </div>
           <div
             class={cn(

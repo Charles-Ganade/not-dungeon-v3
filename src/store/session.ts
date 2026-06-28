@@ -16,6 +16,7 @@ import type {
   ScriptBundle,
 } from "@/core/types/stories";
 import type { Session, Delta, DeltaTransaction } from "@/core/types/sessions";
+import type { EnabledPlugin } from "@/core/types/plugins";
 import { validateActiveMemories } from "@/core/engine/context_builder";
 
 interface SessionState {
@@ -506,6 +507,17 @@ export function editScripts(updates: Partial<ScriptBundle>): void {
   scheduleSave();
 }
 
+/**
+ * Replaces the story's enabled-plugin list (opt-ins + per-plugin config).
+ * Configuration, not gameplay — not delta-tracked, just persisted.
+ */
+export function setEnabledPlugins(next: EnabledPlugin[]): void {
+  const story = sessionStore.story;
+  if (!story) return;
+  setState("story", "enabledPlugins", next);
+  scheduleSave();
+}
+
 function editMemory(
   memoryId: string,
   memory: string | ((prev: string) => string),
@@ -644,4 +656,5 @@ export const sessionStore = {
   removeStoryCard,
   editMemory,
   editKvMemory,
+  setEnabledPlugins,
 };
