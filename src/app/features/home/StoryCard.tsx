@@ -90,11 +90,19 @@ export function StoryCard(props: StoryCardProps) {
             {props.story.name}
           </Text>
 
-          <Show when={props.story.description}>
-            <Text variant="body" color="muted" clamp={2}>
-              {props.story.description}
-            </Text>
-          </Show>
+          <Text
+            class="leading-none italic"
+            variant="body"
+            color="muted"
+            clamp={2}
+          >
+            <Show
+              when={props.story.description.trim()}
+              fallback={"No Description"}
+            >
+              {props.story.description.trim()}
+            </Show>
+          </Text>
           <div class="flex-1"></div>
           <div class="mt-2 flex flex-col gap-3">
             <div class="flex items-center gap-2">
@@ -138,7 +146,7 @@ export function StoryCard(props: StoryCardProps) {
                 <BsPencil />
               </button>
               <A
-                class="btn btn-primary btn-sm ml-1"
+                class="btn btn-secondary btn-sm ml-1"
                 onClick={(e) => {
                   e.stopPropagation();
                 }}

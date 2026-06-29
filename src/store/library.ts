@@ -45,7 +45,7 @@ const items = createMemo<LibraryItem[]>(() => {
     data: scenario,
   }));
 
-  return [...storyItems, ...scenarioItems].sort((a, b) => {
+  return [...storyItems, ...scenarioItems].sort((b, a) => {
     const aTime = a.kind === "story" ? a.data.lastPlayedAt : a.data.updatedAt;
     const bTime = b.kind === "story" ? b.data.lastPlayedAt : b.data.updatedAt;
     return aTime - bTime;

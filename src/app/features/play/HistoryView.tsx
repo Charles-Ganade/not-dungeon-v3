@@ -120,10 +120,6 @@ function HistoryEntry(props: {
           onClick={(e) => e.stopPropagation()}
         >
           <input id={`collapse-notes-${id}`} type="checkbox" class="peer" />
-          <label
-            for={`collapse-notes-${id}`}
-            class="fixed inset-0 hidden peer-checked:block"
-          ></label>
           <div class="collapse-title font-semibold p-0 h-fit">
             <Text variant={"overline"} color={"subtle"}>
               User Notes
@@ -140,10 +136,6 @@ function HistoryEntry(props: {
           onClick={(e) => e.stopPropagation()}
         >
           <input id={`collapse-${id}`} type="checkbox" class="peer" />
-          <label
-            for={`collapse-${id}`}
-            class="fixed inset-0 hidden peer-checked:block"
-          ></label>
           <div class="collapse-title font-semibold p-0 h-fit">
             <Text variant={"overline"} color={"subtle"}>
               Thoughts

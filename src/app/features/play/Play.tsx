@@ -135,7 +135,7 @@ export function PlayPage() {
               </Flex>
               <div
                 ref={scrollRef!}
-                class="w-full max-w-fit min-w-0 flex flex-col flex-1 items-center pt-4 overflow-y-auto"
+                class="w-full min-w-0 flex flex-col flex-1 items-center pt-4 overflow-y-auto"
               >
                 <HistoryView />
               </div>

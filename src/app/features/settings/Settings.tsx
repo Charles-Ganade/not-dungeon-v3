@@ -50,7 +50,7 @@ export function Settings(props: SettingsProps) {
       onClose={props.onClose}
     >
       <div class="flex flex-col md:grid md:grid-cols-6 h-full min-h-0 w-full">
-        <ul class="menu menu-horizontal md:menu-vertical md:col-span-1 w-full flex-nowrap md:flex-wrap overflow-x-auto bg-base-300 shrink-0 p-2 md:p-4 gap-1 md:gap-2 z-10 shadow-sm md:shadow-none">
+        <ul class="menu menu-horizontal md:menu-vertical md:col-span-1 w-full flex-nowrap overflow-x-auto md:overflow-x-hidden md:overflow-y-auto bg-base-300 shrink-0 p-2 md:p-4 gap-1 md:gap-2 z-10 shadow-sm md:shadow-none">
           <For each={GLOBAL_SETTING_KEYS}>
             {(key) => (
               <li>
@@ -74,7 +74,7 @@ export function Settings(props: SettingsProps) {
         <Box class="md:col-span-5 flex flex-col flex-1 min-h-0">
           <div
             class={cn(
-              "flex-1 flex w-full min-h-0",
+              "flex-1 flex w-full min-h-0 overflow-y-auto",
               currentSettingsTab() !== "API" && "hidden",
             )}
           >
@@ -82,7 +82,7 @@ export function Settings(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex w-full min-h-0",
+              "flex-1 flex w-full min-h-0 overflow-y-auto",
               currentSettingsTab() !== "Parameters" && "hidden",
             )}
           >
@@ -90,7 +90,7 @@ export function Settings(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex w-full min-h-0",
+              "flex-1 flex w-full min-h-0 overflow-y-auto",
               currentSettingsTab() !== "Prompts" && "hidden",
             )}
           >
@@ -98,7 +98,7 @@ export function Settings(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex w-full min-h-0",
+              "flex-1 flex w-full min-h-0 overflow-y-auto",
               currentSettingsTab() !== "UI" && "hidden",
             )}
           >
@@ -106,7 +106,7 @@ export function Settings(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex w-full min-h-0",
+              "flex-1 flex w-full min-h-0 overflow-y-auto",
               currentSettingsTab() !== "Game" && "hidden",
             )}
           >
@@ -114,7 +114,7 @@ export function Settings(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex w-full min-h-0",
+              "flex-1 flex w-full min-h-0 overflow-y-auto",
               currentSettingsTab() !== "Scripts" && "hidden",
             )}
           >
@@ -122,7 +122,7 @@ export function Settings(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex w-full min-h-0",
+              "flex-1 flex w-full min-h-0 overflow-y-auto",
               currentSettingsTab() !== "Plugins" && "hidden",
             )}
           >
@@ -130,7 +130,7 @@ export function Settings(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex w-full min-h-0",
+              "flex-1 flex w-full min-h-0 overflow-y-auto",
               currentSettingsTab() !== "Data" && "hidden",
             )}
           >

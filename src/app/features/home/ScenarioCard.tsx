@@ -56,11 +56,19 @@ export function ScenarioCard(props: ScenarioCardProps) {
             {props.scenario.name}
           </Text>
 
-          <Show when={props.scenario.description}>
-            <Text variant="body" color="muted" clamp={2}>
-              {props.scenario.description}
-            </Text>
-          </Show>
+          <Text
+            class="leading-none italic"
+            variant="body"
+            color="muted"
+            clamp={2}
+          >
+            <Show
+              when={props.scenario.description.trim()}
+              fallback={"No Description"}
+            >
+              {props.scenario.description.trim()}
+            </Show>
+          </Text>
 
           <div class="flex-1"></div>
 

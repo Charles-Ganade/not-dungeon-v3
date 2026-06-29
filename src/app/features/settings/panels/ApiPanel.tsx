@@ -50,7 +50,7 @@ export function APIPanel() {
           <div>
             <Text>Provider</Text>
             <select
-              class="select inline"
+              class="select"
               value={settingsStore.settings.API.providerId}
               onChange={(e) => {
                 settingsStore.patch({
@@ -131,7 +131,7 @@ export function APIPanel() {
           <Text>Model</Text>
           <Flex class="gap-2">
             <select
-              class="select inline flex-1"
+              class="select flex-1"
               value={settingsStore.settings.API.model}
               onChange={(e) => {
                 settingsStore.patch({ API: { model: e.currentTarget.value } });

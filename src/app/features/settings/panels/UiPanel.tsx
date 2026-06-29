@@ -13,7 +13,7 @@ export function UiPanel() {
         <div>
           <Text>Theme</Text>
           <select
-            class="select inline"
+            class="select"
             value={settingsStore.settings.UI.theme}
             onChange={(e) => {
               settingsStore.patch({

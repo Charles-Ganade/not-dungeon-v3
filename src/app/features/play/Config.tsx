@@ -44,7 +44,7 @@ export function Config(props: SettingsProps) {
       closeOnEsc={false}
     >
       <div class="flex flex-col md:grid md:grid-cols-6 h-full min-h-0 w-full">
-        <ul class="menu menu-horizontal md:menu-vertical md:col-span-1 w-full flex-nowrap md:flex-wrap overflow-x-auto bg-base-300 shrink-0 p-2 md:p-4 gap-1 md:gap-2 z-10 shadow-sm md:shadow-none">
+        <ul class="menu menu-horizontal md:menu-vertical md:col-span-1 w-full flex-nowrap overflow-x-auto md:overflow-x-hidden md:overflow-y-auto bg-base-300 shrink-0 p-2 md:p-4 gap-1 md:gap-2 z-10 shadow-sm md:shadow-none">
           <For each={CONFIG_TABS}>
             {(key) => (
               <li>
@@ -68,7 +68,7 @@ export function Config(props: SettingsProps) {
         <Flex class="md:col-span-5 flex-col flex-1 min-h-0">
           <div
             class={cn(
-              "flex-1 flex min-h-0",
+              "flex-1 flex min-h-0 overflow-y-auto",
               currentConfigTab() !== "Story" && "hidden",
             )}
           >
@@ -76,7 +76,7 @@ export function Config(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex min-h-0",
+              "flex-1 flex min-h-0 overflow-y-auto",
               currentConfigTab() !== "Plot" && "hidden",
             )}
           >
@@ -84,7 +84,7 @@ export function Config(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex min-h-0",
+              "flex-1 flex min-h-0 overflow-y-auto",
               currentConfigTab() !== "Story Cards" && "hidden",
             )}
           >
@@ -92,7 +92,7 @@ export function Config(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex min-h-0",
+              "flex-1 flex min-h-0 overflow-y-auto",
               currentConfigTab() !== "Memories" && "hidden",
             )}
           >
@@ -100,7 +100,7 @@ export function Config(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex min-h-0",
+              "flex-1 flex min-h-0 overflow-y-auto",
               currentConfigTab() !== "Scripts" && "hidden",
             )}
           >
@@ -108,7 +108,7 @@ export function Config(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex min-h-0",
+              "flex-1 flex min-h-0 overflow-y-auto",
               currentConfigTab() !== "Plugins" && "hidden",
             )}
           >
@@ -116,7 +116,7 @@ export function Config(props: SettingsProps) {
           </div>
           <div
             class={cn(
-              "flex-1 flex min-h-0",
+              "flex-1 flex min-h-0 overflow-y-auto",
               currentConfigTab() !== "Debug Panel" && "hidden",
             )}
           >
