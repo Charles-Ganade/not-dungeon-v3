@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import type { HistoryMessage, Story } from "@/core/types/stories";
 import { getThumbnailBlob } from "@/services/db";
-import { dataURLToBlob } from "@/utils";
+import { dataURLToBlob, isZip, toBytes } from "@/utils";
 
 const STORY_BUNDLE_VERSION = 1;
 
@@ -40,15 +40,6 @@ function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return base || "story";
-}
-
-function toBytes(data: ArrayBuffer | Uint8Array): Uint8Array {
-  return data instanceof Uint8Array ? data : new Uint8Array(data);
-}
-
-/** ZIP local-file-header magic ("PK\x03\x04"). */
-function isZip(bytes: Uint8Array): boolean {
-  return bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b;
 }
 
 /**

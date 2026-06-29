@@ -1,0 +1,1 @@
+export { PluginConfigEditor } from "./PluginConfigEditor";

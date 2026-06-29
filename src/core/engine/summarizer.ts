@@ -1,6 +1,7 @@
 import { sessionStore, configStore } from "@/store";
 import { stream, LLMMessage } from "@/services/llm";
 import type { Memory, HistoryMessage } from "@/core/types/stories";
+import { countTokens } from "./tokenizer";
 
 export async function summarizeHistory(): Promise<Pick<
   Memory,
@@ -17,8 +18,10 @@ export async function summarizeHistory(): Promise<Pick<
   const summarizedIds = new Set(activeMemories.flatMap((m) => m.messageIds));
 
   const unsummarizedPath = activePath.filter((m) => !summarizedIds.has(m.id));
-  const textChars = unsummarizedPath.reduce((acc, m) => acc + m.text.length, 0);
-  const estimatedTokens = textChars / 4;
+  const estimatedTokens = unsummarizedPath.reduce(
+    (acc, m) => acc + countTokens(m.text),
+    0,
+  );
 
   const threshold = config.params.contextWindow * 0.8;
 
@@ -32,7 +35,7 @@ export async function summarizeHistory(): Promise<Pick<
     const msg = activePath[i];
 
     if (!summarizedIds.has(msg.id)) {
-      preservedTokens += msg.text.length / 4;
+      preservedTokens += countTokens(msg.text);
     }
 
     if (preservedTokens > preserveTokenBudget) {

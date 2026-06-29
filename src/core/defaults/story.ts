@@ -51,6 +51,7 @@ export function makeDefaultScenario(
       buildContext: DEFAULT_SCRIPT_BUILD_CONTEXT,
       output: DEFAULT_SCRIPT_OUTPUT,
     },
+    enabledPlugins: [],
     override: { prompts: {} },
     createdAt: now,
     updatedAt: now,
@@ -86,6 +87,7 @@ export function makeStoryFromScenario(
     openingPrompt: scenario.openingPrompt,
     override: structuredClone(scenario.override),
     storyCards: structuredClone(scenario.storyCards),
-    scripts: structuredClone(scenario.scripts)
+    scripts: structuredClone(scenario.scripts),
+    enabledPlugins: structuredClone(scenario.enabledPlugins ?? []),
   };
 }

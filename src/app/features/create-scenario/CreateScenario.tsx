@@ -1,7 +1,7 @@
 import { Flex, Text } from "@/app/components";
 import { makeDefaultScenario } from "@/core/defaults";
 import { useNavigate } from "@solidjs/router";
-import { BsTextCenter } from "solid-icons/bs";
+import { BsTextCenter, BsPuzzleFill } from "solid-icons/bs";
 import { FiArrowLeft, FiCode, FiList, FiSave } from "solid-icons/fi";
 import { RiDocumentFilePaperFill } from "solid-icons/ri";
 import { createStore, unwrap } from "solid-js/store";
@@ -10,6 +10,7 @@ import { ScriptsTab } from "./tabs/ScriptsTab";
 import { StoryTab } from "./tabs/StoryTab";
 import { DetailsTab } from "./tabs/DetailsTab";
 import { StoryCardsTab } from "./tabs/StoryCardsTab";
+import { PluginsTab } from "./tabs/PluginsTab";
 import { createMemo, createSignal } from "solid-js";
 import { toast } from "solid-sonner";
 import { libraryStore } from "@/store";
@@ -114,6 +115,17 @@ export default function CreateScenario() {
                 </div>
               </label>
               <ScriptsTab />
+
+              <label class="tab">
+                <input type="radio" name="scenario-tab" />
+                <div class="flex items-center gap-2">
+                  <Text class="text-inherit">
+                    <BsPuzzleFill />
+                  </Text>
+                  <Text class="text-inherit">Plugins</Text>
+                </div>
+              </label>
+              <PluginsTab />
             </div>
           </div>
         </Flex>

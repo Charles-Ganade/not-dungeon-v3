@@ -143,9 +143,9 @@ export interface BuildContextHookContext extends BaseHookContext {
   messages: ContextMessage[];
 
   /**
-   * Rough token estimate for the current messages array (chars / 4).
-   * Read-only hint for budget decisions. Recalculated by the engine
-   * after this script finishes.
+   * Token count for the current messages array, using the model's
+   * tokenizer (BPE). Read-only hint for budget decisions. Recalculated
+   * by the engine after this script finishes.
    */
   readonly estimatedTokens: number;
 

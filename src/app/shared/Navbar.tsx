@@ -1,4 +1,4 @@
-import { A } from "@solidjs/router";
+import { A, useLocation } from "@solidjs/router";
 import { Box, Flex, Text } from "../components";
 import { FaRegularHome } from "solid-icons/fa";
 import { VsSettingsGear } from "solid-icons/vs";
@@ -7,8 +7,14 @@ import { Settings } from "../features";
 
 export default function Navbar() {
   const [isSettingsModalOpen, setSettingsModalOpen] = createSignal(false);
+  const location = useLocation();
 
-  createEffect(() => {});
+  // Close the settings modal whenever the route changes (e.g. navigating into
+  // the plugin editor from Settings → Plugins).
+  createEffect(() => {
+    location.pathname;
+    setSettingsModalOpen(false);
+  });
   return (
     <Box position={"sticky"} as={"nav"} class="top-0 z-10 bg-base-100">
       <Flex class="border-b px-4 py-3">

@@ -1,5 +1,6 @@
 import { ScriptBundle } from "./stories";
 import { ConfigOverride, Story, StoryCard } from "./stories";
+import { EnabledPlugin } from "./plugins";
 
 /**
  * A Scenario is a reusable template. It defines the starting
@@ -42,6 +43,13 @@ export interface Scenario {
    * Story scripts are merged on top.
    */
   scripts: ScriptBundle;
+
+  /**
+   * Plugins this scenario uses, with default config. Stories created from
+   * the scenario inherit these (pre-enabled), and scenario export bundles
+   * the referenced plugins so importing is plug-and-play.
+   */
+  enabledPlugins?: EnabledPlugin[];
 
   override: ConfigOverride;
 

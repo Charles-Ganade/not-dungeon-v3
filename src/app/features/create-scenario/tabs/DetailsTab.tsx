@@ -7,6 +7,7 @@ import TextareaAutosize from "solid-textarea-autosize";
 import { makeDefaultScenario } from "@/core/defaults";
 import { importScenario } from "@/core/utils/scenarioIO";
 import { toast } from "solid-sonner";
+import { pluginsStore } from "@/store";
 
 export function DetailsTab() {
   const { newScenario, setNewScenario, thumbBlob, setThumbBlob } =
@@ -27,19 +28,38 @@ export function DetailsTab() {
     setThumbBlob(file);
   };
 
-  const handleImport = (e: Event) => {
-    const file = (e.currentTarget as HTMLInputElement).files?.[0];
+  const handleImport = async (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const scenario = importScenario(reader.result as string);
-        setNewScenario(makeDefaultScenario(scenario));
-      } catch (err) {
-        toast.error((err as Error).message);
+    try {
+      const { scenario, thumbnailBlob, bundledPlugins } = await importScenario(
+        await file.arrayBuffer(),
+      );
+
+      // Install bundled plugins, keeping any already-installed copy.
+      let installed = 0;
+      let kept = 0;
+      for (const manifest of bundledPlugins) {
+        if (pluginsStore.installed.some((p) => p.id === manifest.id)) {
+          kept++;
+        } else {
+          await pluginsStore.install(manifest);
+          installed++;
+        }
       }
-    };
-    reader.readAsText(file);
+
+      setThumbBlob(thumbnailBlob);
+      setNewScenario(makeDefaultScenario(scenario));
+
+      const parts = [`Imported "${scenario.name}".`];
+      if (installed) parts.push(`${installed} plugin(s) installed.`);
+      if (kept) parts.push(`${kept} already installed.`);
+      toast.success(parts.join(" "));
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   };
   return (
     <div class="tab-content bg-base-100">
@@ -145,7 +165,7 @@ export function DetailsTab() {
           <label class="btn btn-primary btn-large">
             <input
               type="file"
-              accept=".json"
+              accept=".zip,.json,application/zip,application/json"
               class="hidden"
               onChange={handleImport}
             />

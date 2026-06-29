@@ -1,6 +1,7 @@
 import type { HistoryMessage, Memory, StoryCard } from "@/core/types/stories";
 import type { ResolvedConfig } from "@/core/types/stories";
 import type { LLMMessage } from "@/services/llm/types";
+import { countTokens } from "./tokenizer";
 
 export interface ContextBuilderInput {
   /** Ordered root → leaf messages on the active branch. */
@@ -21,16 +22,12 @@ export interface ContextBuilderInput {
 
 export interface ContextBuilderOutput {
   messages: LLMMessage[];
-  /** Rough token estimate (chars / 4). Used by the buildContext hook. */
+  /** Token count (model tokenizer). Used by the buildContext hook. */
   estimatedTokens: number;
   /** Story cards whose triggers matched the recent context. */
   activeStoryCards: StoryCard[];
   hasOverflow: boolean;
   truncatedMessageCount: number;
-}
-
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
 }
 
 /**
@@ -71,7 +68,7 @@ export function resolveTriggerWindow(
 
   for (let i = activePath.length - 1; i >= 0; i--) {
     const message = activePath[i];
-    const msgTokens = estimateTokens(message.text);
+    const msgTokens = countTokens(message.text);
 
     if (accumulatedTokens + msgTokens > tokenBudget && window.length > 0) {
       break;
@@ -112,7 +109,7 @@ export function truncateToFit(
   const historyMsgs = messages.slice(headerEnd);
 
   let currentTokens = header.reduce(
-    (sum, msg) => sum + estimateTokens(msg.content),
+    (sum, msg) => sum + countTokens(msg.content),
     0,
   );
   let removedCount = 0;
@@ -121,7 +118,7 @@ export function truncateToFit(
 
   for (let i = historyMsgs.length - 1; i >= 0; i--) {
     const msg = historyMsgs[i];
-    const msgTokens = estimateTokens(msg.content);
+    const msgTokens = countTokens(msg.content);
 
     if (
       i === historyMsgs.length - 1 ||
@@ -260,7 +257,7 @@ export function formatKickerText(
   if (availableTokens < 300) {
     return {
       text: baseReminder,
-      estimatedTokens: estimateTokens(baseReminder),
+      estimatedTokens: countTokens(baseReminder),
     };
   }
 
@@ -271,7 +268,7 @@ export function formatKickerText(
   parts.push(baseReminder);
 
   const fullText = parts.join("\n");
-  const tokens = estimateTokens(fullText);
+  const tokens = countTokens(fullText);
 
   return { text: fullText, estimatedTokens: tokens };
 }
@@ -338,12 +335,12 @@ export function buildDefaultContext(
   });
 
   const systemMsg = systemParts.join("\n\n");
-  let currentEstimate = estimateTokens(systemMsg);
+  let currentEstimate = countTokens(systemMsg);
   for (const msg of injectedMessages) {
-    currentEstimate += estimateTokens(msg.content);
+    currentEstimate += countTokens(msg.content);
   }
   for (const msg of historyMessages) {
-    currentEstimate += estimateTokens(msg.content);
+    currentEstimate += countTokens(msg.content);
   }
 
   const availableForKicker =
@@ -374,12 +371,12 @@ export function buildDefaultContext(
     ...historyMessages,
   ];
 
-  let estimatedTokens = estimateTokens(systemMsg);
+  let estimatedTokens = countTokens(systemMsg);
   for (const msg of injectedMessages) {
-    estimatedTokens += estimateTokens(msg.content);
+    estimatedTokens += countTokens(msg.content);
   }
   for (const msg of historyMessages) {
-    estimatedTokens += estimateTokens(msg.content);
+    estimatedTokens += countTokens(msg.content);
   }
 
   const fitResult = validateContextFit(
@@ -397,7 +394,7 @@ export function buildDefaultContext(
 
     estimatedTokens = 0;
     for (const msg of messages) {
-      estimatedTokens += estimateTokens(msg.content);
+      estimatedTokens += countTokens(msg.content);
     }
   }
 

@@ -6,6 +6,7 @@ import type {
   EnabledPlugin,
 } from "@/core/types/plugins";
 import type { ScriptBundle } from "@/core/types/stories";
+import { isZip, toBytes } from "@/utils";
 
 const PLUGIN_BUNDLE_VERSION = 1;
 
@@ -40,15 +41,6 @@ function slugify(value: string): string {
   return base || "plugin";
 }
 
-function toBytes(data: ArrayBuffer | Uint8Array): Uint8Array {
-  return data instanceof Uint8Array ? data : new Uint8Array(data);
-}
-
-/** ZIP local-file-header magic ("PK\x03\x04"). */
-function isZip(bytes: Uint8Array): boolean {
-  return bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b;
-}
-
 function validateConfigSchema(value: unknown): PluginConfigField[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) {
@@ -79,8 +71,10 @@ function validateConfigSchema(value: unknown): PluginConfigField[] | undefined {
 
 /**
  * Validates a fully-assembled manifest (hooks already inlined as strings).
+ * Exported as {@link validatePluginManifest} for the in-app editor — the same
+ * validation the import path uses.
  */
-function validateManifest(value: unknown): PluginManifest {
+export function validateManifest(value: unknown): PluginManifest {
   if (typeof value !== "object" || value === null) {
     throw new Error('Invalid bundle — "manifest" must be an object.');
   }
@@ -224,6 +218,9 @@ function importLegacyPluginJSON(json: string): PluginManifest {
   const meta = parseBundleManifest(json);
   return validateManifest(meta);
 }
+
+/** Public alias of {@link validateManifest} for the plugin editor. */
+export const validatePluginManifest = validateManifest;
 
 /**
  * Resolves the config a plugin sees at runtime:

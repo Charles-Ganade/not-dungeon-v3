@@ -10,6 +10,7 @@ import {
   ScriptStream,
 } from "@/services/llm";
 import { buildDefaultContext } from "./context_builder";
+import { ensureTokenizer } from "./tokenizer";
 import {
   mergeScriptBundle,
   runScript,
@@ -146,6 +147,10 @@ async function generate(options: {
 
   if (!story || !config) return;
   if (sessionStore.isGenerating) return;
+
+  // Load the model's BPE encoding so the (synchronous) context builder and
+  // summarizer count real tokens this turn. Idempotent; falls back to chars/4.
+  await ensureTokenizer(config.model);
 
   _abortController = new AbortController();
   const { signal } = _abortController;

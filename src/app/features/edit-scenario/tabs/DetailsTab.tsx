@@ -6,6 +6,9 @@ import { useEditScenario } from "../context";
 import TextareaAutosize from "solid-textarea-autosize";
 import { exportScenario } from "@/core/utils/scenarioIO";
 import { unwrap } from "solid-js/store";
+import { pluginsStore } from "@/store";
+import { toast } from "solid-sonner";
+import type { PluginManifest } from "@/core/types/plugins";
 
 export function DetailsTab() {
   const { currentScenario, setCurrentScenario, thumbBlob, setThumbBlob } =
@@ -26,14 +29,37 @@ export function DetailsTab() {
     setThumbBlob(file);
   };
 
-  const handleExport = () => {
-    const file = exportScenario(unwrap(currentScenario));
-    const url = URL.createObjectURL(file);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = file.name;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    try {
+      const scenario = unwrap(currentScenario);
+
+      // Resolve the scenario's enabled plugins to their installed manifests so
+      // they can be bundled. Warn about any that are no longer installed.
+      const manifests: PluginManifest[] = [];
+      const missing: string[] = [];
+      for (const enabled of scenario.enabledPlugins ?? []) {
+        const manifest = pluginsStore.installed.find(
+          (p) => p.id === enabled.pluginId,
+        );
+        if (manifest) manifests.push(manifest);
+        else missing.push(enabled.pluginId);
+      }
+      if (missing.length) {
+        toast.error(
+          `Skipping uninstalled plugin(s) in export: ${missing.join(", ")}.`,
+        );
+      }
+
+      const file = await exportScenario(scenario, manifests);
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   };
   return (
     <div class="tab-content bg-base-100">

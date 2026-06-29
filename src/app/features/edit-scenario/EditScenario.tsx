@@ -8,12 +8,13 @@ import { Flex, Text } from "@/app/components";
 import { FiArrowLeft, FiCode, FiList, FiSave } from "solid-icons/fi";
 import { makeDefaultScenario } from "@/core/defaults";
 import { toast } from "solid-sonner";
-import { BsTextCenter } from "solid-icons/bs";
+import { BsTextCenter, BsPuzzleFill } from "solid-icons/bs";
 import { RiDocumentFilePaperFill } from "solid-icons/ri";
 import { DetailsTab } from "./tabs/DetailsTab";
 import { ScriptsTab } from "./tabs/ScriptsTab";
 import { StoryCardsTab } from "./tabs/StoryCardsTab";
 import { StoryTab } from "./tabs/StoryTab";
+import { PluginsTab } from "./tabs/PluginsTab";
 import { isEqual } from "lodash";
 
 export function EditScenario() {
@@ -151,6 +152,17 @@ export function EditScenario() {
                 </div>
               </label>
               <ScriptsTab />
+
+              <label class="tab">
+                <input type="radio" name="scenario-tab" />
+                <div class="flex items-center gap-2">
+                  <Text class="text-inherit">
+                    <BsPuzzleFill />
+                  </Text>
+                  <Text class="text-inherit">Plugins</Text>
+                </div>
+              </label>
+              <PluginsTab />
             </div>
           </div>
         </Flex>

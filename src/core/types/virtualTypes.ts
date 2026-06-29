@@ -90,6 +90,8 @@ interface BaseHookContext {
     warn: (...args: unknown[]) => void;
     error: (...args: unknown[]) => void;
   };
+  /** Resolved config for the running plugin ({} for scenario/story scripts). */
+  readonly pluginConfig: Readonly<Record<string, unknown>>;
   stop(reason?: string): void;
   cancel(reason?: string): void;
 }` as HookContext;

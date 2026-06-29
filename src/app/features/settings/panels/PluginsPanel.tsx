@@ -2,12 +2,14 @@ import { Flex, Text } from "@/app/components";
 import { PanelLabel } from "../PanelLabel";
 import { For, Show } from "solid-js";
 import { toast } from "solid-sonner";
+import { useNavigate } from "@solidjs/router";
 import { pluginsStore } from "@/store";
 import { importPlugin, exportPlugin } from "@/core/utils/pluginIO";
 import type { InstalledPlugin } from "@/core/types/plugins";
-import { FiTrash2, FiDownload } from "solid-icons/fi";
+import { FiTrash2, FiDownload, FiEdit, FiPlus } from "solid-icons/fi";
 
 export function PluginsPanel() {
+  const navigate = useNavigate();
   const handleInstall = async (e: { currentTarget: HTMLInputElement }) => {
     const input = e.currentTarget;
     const file = input.files?.[0] ?? null;
@@ -54,18 +56,28 @@ export function PluginsPanel() {
       <Flex direction={"col"} class="px-4 gap-4">
         <Flex direction={"col"} class="gap-2">
           <Text variant={"bodySm"} color={"muted"}>
-            Install a plugin bundle (.plugin.json). Installed plugins can be
-            enabled and configured per story from the in-game Plugins panel.
+            Create a plugin from scratch, or install a bundle (.plugin.zip /
+            .plugin.json). Installed plugins can be enabled and configured per
+            story or scenario.
           </Text>
-          <label class="btn btn-primary w-fit">
-            <Text class="text-primary-content">Install Plugin…</Text>
-            <input
-              type="file"
-              class="hidden"
-              accept=".zip,.json,application/zip,application/json"
-              onChange={handleInstall}
-            />
-          </label>
+          <Flex class="gap-2 flex-wrap">
+            <button
+              class="btn btn-primary w-fit"
+              onClick={() => navigate("/create-plugin")}
+            >
+              <FiPlus />
+              <Text class="text-primary-content">New Plugin</Text>
+            </button>
+            <label class="btn w-fit">
+              <Text>Install Plugin…</Text>
+              <input
+                type="file"
+                class="hidden"
+                accept=".zip,.json,application/zip,application/json"
+                onChange={handleInstall}
+              />
+            </label>
+          </Flex>
         </Flex>
 
         <div class="divider my-0" />
@@ -98,6 +110,13 @@ export function PluginsPanel() {
                       </Show>
                     </div>
                     <Flex class="gap-1 shrink-0">
+                      <button
+                        class="btn btn-ghost btn-sm btn-square"
+                        title="Edit"
+                        onClick={() => navigate(`/edit-plugin/${plugin.id}`)}
+                      >
+                        <FiEdit />
+                      </button>
                       <button
                         class="btn btn-ghost btn-sm btn-square"
                         title="Export"
