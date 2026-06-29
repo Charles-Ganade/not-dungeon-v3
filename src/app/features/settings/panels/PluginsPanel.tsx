@@ -14,7 +14,7 @@ export function PluginsPanel() {
     input.value = "";
     if (!file) return;
     try {
-      const manifest = importPlugin(await file.text());
+      const manifest = await importPlugin(await file.arrayBuffer());
       await pluginsStore.install(manifest);
       const perms = manifest.permissions.length
         ? manifest.permissions.join(", ")
@@ -25,14 +25,18 @@ export function PluginsPanel() {
     }
   };
 
-  const handleExport = (manifest: InstalledPlugin) => {
-    const file = exportPlugin(manifest);
-    const url = URL.createObjectURL(file);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = file.name;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExport = async (manifest: InstalledPlugin) => {
+    try {
+      const file = await exportPlugin(manifest);
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   };
 
   const handleUninstall = async (manifest: InstalledPlugin) => {
@@ -58,7 +62,7 @@ export function PluginsPanel() {
             <input
               type="file"
               class="hidden"
-              accept="application/json,.json"
+              accept=".zip,.json,application/zip,application/json"
               onChange={handleInstall}
             />
           </label>

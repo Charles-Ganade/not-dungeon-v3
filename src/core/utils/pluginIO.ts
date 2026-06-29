@@ -1,9 +1,11 @@
+import JSZip from "jszip";
 import type {
   PluginManifest,
   PluginCapability,
   PluginConfigField,
   EnabledPlugin,
 } from "@/core/types/plugins";
+import type { ScriptBundle } from "@/core/types/stories";
 
 const PLUGIN_BUNDLE_VERSION = 1;
 
@@ -22,11 +24,12 @@ const FIELD_TYPES: PluginConfigField["type"][] = [
   "select",
 ];
 
-export interface PluginBundleV1 {
-  schemaVersion: 1;
-  kind: "plugin";
-  manifest: PluginManifest;
-}
+const HOOK_PHASES: (keyof ScriptBundle)[] = [
+  "library",
+  "input",
+  "buildContext",
+  "output",
+];
 
 function slugify(value: string): string {
   const base = value
@@ -37,12 +40,13 @@ function slugify(value: string): string {
   return base || "plugin";
 }
 
-/** Upgrades an older bundle to the current schema before validation. */
-function migratePluginBundle(raw: Record<string, unknown>): PluginBundleV1 {
-  if (raw.schemaVersion === PLUGIN_BUNDLE_VERSION) {
-    return raw as unknown as PluginBundleV1;
-  }
-  throw new Error(`Unsupported plugin bundle version: ${String(raw.schemaVersion)}`);
+function toBytes(data: ArrayBuffer | Uint8Array): Uint8Array {
+  return data instanceof Uint8Array ? data : new Uint8Array(data);
+}
+
+/** ZIP local-file-header magic ("PK\x03\x04"). */
+function isZip(bytes: Uint8Array): boolean {
+  return bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b;
 }
 
 function validateConfigSchema(value: unknown): PluginConfigField[] | undefined {
@@ -73,6 +77,9 @@ function validateConfigSchema(value: unknown): PluginConfigField[] | undefined {
   });
 }
 
+/**
+ * Validates a fully-assembled manifest (hooks already inlined as strings).
+ */
 function validateManifest(value: unknown): PluginManifest {
   if (typeof value !== "object" || value === null) {
     throw new Error('Invalid bundle — "manifest" must be an object.');
@@ -123,16 +130,13 @@ function validateManifest(value: unknown): PluginManifest {
   };
 }
 
-/**
- * Parses and validates a `.plugin.json` bundle into a manifest, ready to
- * install. Pure — the caller persists it (mirrors `importScenario`).
- */
-export function importPlugin(json: string): PluginManifest {
+/** Parses the bundle wrapper, checking container shape. Returns the manifest object. */
+function parseBundleManifest(json: string): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch {
-    throw new Error("Invalid JSON — could not parse the file.");
+    throw new Error("Invalid JSON — could not parse the plugin manifest.");
   }
   if (typeof parsed !== "object" || parsed === null) {
     throw new Error("Invalid format — expected a plugin bundle object.");
@@ -141,21 +145,84 @@ export function importPlugin(json: string): PluginManifest {
   if (raw.kind !== "plugin") {
     throw new Error('Invalid bundle — "kind" must be "plugin".');
   }
-  const bundle = migratePluginBundle(raw);
-  return validateManifest(bundle.manifest);
+  if (raw.schemaVersion !== PLUGIN_BUNDLE_VERSION) {
+    throw new Error(`Unsupported plugin bundle version: ${String(raw.schemaVersion)}`);
+  }
+  if (typeof raw.manifest !== "object" || raw.manifest === null) {
+    throw new Error('Invalid bundle — "manifest" must be an object.');
+  }
+  return raw.manifest as Record<string, unknown>;
 }
 
-/** Serializes a manifest to a downloadable `.plugin.json` bundle. */
-export function exportPlugin(manifest: PluginManifest): File {
-  const bundle: PluginBundleV1 = {
+/**
+ * Serializes a plugin to a downloadable `.plugin.zip`: `manifest.json`
+ * (metadata only) plus each hook as its own `hooks/<phase>.js` file — far
+ * easier to read and edit than a giant escaped JSON string.
+ */
+export async function exportPlugin(manifest: PluginManifest): Promise<File> {
+  const zip = new JSZip();
+
+  const hooks = manifest.hooks ?? {};
+  for (const phase of HOOK_PHASES) {
+    const code = hooks[phase];
+    if (code && code.trim()) zip.file(`hooks/${phase}.js`, code);
+  }
+
+  const { hooks: _omitted, ...meta } = manifest;
+  const bundle = {
     schemaVersion: PLUGIN_BUNDLE_VERSION,
     kind: "plugin",
-    manifest,
+    manifest: meta,
   };
-  const json = JSON.stringify(bundle, null, 2);
-  return new File([json], `${slugify(manifest.id)}.plugin.json`, {
-    type: "application/json",
+  zip.file("manifest.json", JSON.stringify(bundle, null, 2));
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  return new File([blob], `${slugify(manifest.id)}.plugin.zip`, {
+    type: "application/zip",
   });
+}
+
+/**
+ * Parses and validates a plugin bundle into a manifest ready to install.
+ * Accepts the new `.plugin.zip` (hooks as files) and the legacy single-JSON
+ * bundle (hooks inline, string or bytes). Pure — the caller persists it.
+ */
+export async function importPlugin(
+  data: ArrayBuffer | Uint8Array | string,
+): Promise<PluginManifest> {
+  if (typeof data === "string") return importLegacyPluginJSON(data);
+
+  const bytes = toBytes(data);
+  if (!isZip(bytes)) {
+    return importLegacyPluginJSON(new TextDecoder().decode(bytes));
+  }
+
+  let zip: JSZip;
+  try {
+    zip = await JSZip.loadAsync(bytes);
+  } catch {
+    throw new Error("Invalid plugin file — could not read the archive.");
+  }
+
+  const manifestFile = zip.file("manifest.json");
+  if (!manifestFile) {
+    throw new Error("Invalid plugin bundle — missing manifest.json.");
+  }
+  const meta = parseBundleManifest(await manifestFile.async("string"));
+
+  const hooks: Partial<ScriptBundle> = {};
+  for (const phase of HOOK_PHASES) {
+    const entry = zip.file(`hooks/${phase}.js`);
+    if (entry) hooks[phase] = await entry.async("string");
+  }
+
+  return validateManifest({ ...meta, hooks });
+}
+
+/** Legacy path: the original single-JSON bundle with hooks inline. */
+function importLegacyPluginJSON(json: string): PluginManifest {
+  const meta = parseBundleManifest(json);
+  return validateManifest(meta);
 }
 
 /**

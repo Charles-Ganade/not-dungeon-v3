@@ -1,26 +1,36 @@
+import JSZip from "jszip";
 import type { HistoryMessage, Story } from "@/core/types/stories";
 import { getThumbnailBlob } from "@/services/db";
-import { blobToDataURL, dataURLToBlob } from "@/utils";
+import { dataURLToBlob } from "@/utils";
 
 const STORY_BUNDLE_VERSION = 1;
 
 /**
- * A portable, self-describing snapshot of a single story (with progress).
+ * The `manifest.json` inside a `.story.zip` — just metadata. The full story
+ * lives in `story.json`; the thumbnail rides along as a real image file
+ * ("thumbnail" entry), with `thumbnail.mime` recording its type.
  *
- *   - `story`      the full Story: branch tree, currentLeafId, thinkingBlocks,
- *                  memories, storyCards, kvMemory, scriptState, scripts, override.
- *   - `thumbnails` referenced thumbnail blobs, base64-encoded by id.
- *
- * The linked scenario is intentionally NOT bundled — a dangling `scenarioId`
- * is tolerated by the library and the engine.
+ * Zip layout:
+ *   manifest.json   this metadata
+ *   story.json      the full Story object
+ *   thumbnail       the thumbnail image bytes (optional)
  */
-export interface StoryBundleV1 {
+interface StoryManifest {
   schemaVersion: 1;
   kind: "story";
   exportedAt: number;
   app?: string;
+  /** Story name — lets you identify a bundle without opening story.json. */
+  name: string;
+  thumbnail?: { mime: string };
+}
+
+/** The legacy single-JSON bundle (thumbnails base64-embedded). Still imported. */
+interface LegacyStoryBundle {
+  schemaVersion: 1;
+  kind: "story";
   story: Story;
-  thumbnails: Record<string, string>;
+  thumbnails?: Record<string, string>;
 }
 
 function slugify(name: string): string {
@@ -32,40 +42,57 @@ function slugify(name: string): string {
   return base || "story";
 }
 
-/**
- * Serializes a story to a downloadable bundle File. Async because the
- * thumbnail blob is read from IndexedDB and base64-encoded inline.
- */
-export async function exportStoryBundle(story: Story): Promise<File> {
-  const thumbnails: Record<string, string> = {};
-  if (story.thumbnailId) {
-    const blob = await getThumbnailBlob(story.thumbnailId);
-    if (blob) thumbnails[story.thumbnailId] = await blobToDataURL(blob);
-  }
+function toBytes(data: ArrayBuffer | Uint8Array): Uint8Array {
+  return data instanceof Uint8Array ? data : new Uint8Array(data);
+}
 
-  const bundle: StoryBundleV1 = {
-    schemaVersion: STORY_BUNDLE_VERSION,
-    kind: "story",
-    exportedAt: Date.now(),
-    story,
-    thumbnails,
-  };
-
-  const json = JSON.stringify(bundle, null, 2);
-  return new File([json], `${slugify(story.name)}.story.json`, {
-    type: "application/json",
-  });
+/** ZIP local-file-header magic ("PK\x03\x04"). */
+function isZip(bytes: Uint8Array): boolean {
+  return bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b;
 }
 
 /**
- * Upgrades an older bundle to the current schema. v1 is current; future
- * versions add upgrade steps here before validation runs.
+ * Serializes a story to a downloadable `.story.zip`: a small `manifest.json`,
+ * the full story in `story.json`, and the thumbnail as a real image file.
+ * Async (reads the thumbnail blob + zips).
  */
-function migrateStoryBundle(raw: Record<string, unknown>): StoryBundleV1 {
-  if (raw.schemaVersion === STORY_BUNDLE_VERSION) {
-    return raw as unknown as StoryBundleV1;
+export async function exportStoryBundle(story: Story): Promise<File> {
+  const zip = new JSZip();
+
+  zip.file("story.json", JSON.stringify(story, null, 2));
+
+  let thumbnail: { mime: string } | undefined;
+  if (story.thumbnailId) {
+    const blob = await getThumbnailBlob(story.thumbnailId);
+    if (blob) {
+      zip.file("thumbnail", blob);
+      thumbnail = { mime: blob.type || "image/png" };
+    }
   }
-  throw new Error(`Unsupported story bundle version: ${String(raw.schemaVersion)}`);
+
+  const manifest: StoryManifest = {
+    schemaVersion: STORY_BUNDLE_VERSION,
+    kind: "story",
+    exportedAt: Date.now(),
+    name: story.name,
+    thumbnail,
+  };
+  zip.file("manifest.json", JSON.stringify(manifest, null, 2));
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  return new File([blob], `${slugify(story.name)}.story.zip`, {
+    type: "application/zip",
+  });
+}
+
+/** Upgrades an older manifest/bundle to the current schema before validation. */
+function migrateStoryManifest(raw: Record<string, unknown>): void {
+  if (raw.schemaVersion !== STORY_BUNDLE_VERSION) {
+    throw new Error(`Unsupported story bundle version: ${String(raw.schemaVersion)}`);
+  }
+  if (raw.kind !== "story") {
+    throw new Error('Invalid bundle — "kind" must be "story".');
+  }
 }
 
 /**
@@ -155,13 +182,10 @@ function validateStory(value: unknown): Story {
 
 /**
  * Regenerates every id so the imported story is an independent copy that can
- * never collide with existing data (importing the same file twice yields two
- * distinct playthroughs). Rewrites all cross-references: parentId,
- * currentLeafId, memory.messageIds, and thinkingBlock ids.
- *
- * `scenarioId` is preserved (relinks if that scenario exists, otherwise a
- * tolerated dangling reference). `thumbnailId` is left for the caller to set
- * after re-saving the blob.
+ * never collide with existing data. Rewrites all cross-references: parentId,
+ * currentLeafId, memory.messageIds, and thinkingBlock ids. `scenarioId` is
+ * preserved (relinks if that scenario exists). `thumbnailId` is left for the
+ * caller to set after re-saving the blob.
  */
 export function remapStoryIds(input: Story): Story {
   const story = structuredClone(input);
@@ -216,12 +240,77 @@ export function remapStoryIds(input: Story): Story {
 
 /**
  * Parses, validates, and normalizes a story bundle into a ready-to-persist
- * payload. Pure with respect to the database — the caller saves the result
- * (e.g. via `libraryStore.addStory(story, thumbnailBlob)`), mirroring
- * `importScenario`. The returned story has `thumbnailId` cleared; pass the
- * blob to the store so it can re-save it under a fresh id.
+ * payload (the caller saves it, e.g. via `libraryStore.addStory`). Accepts the
+ * new `.story.zip` and the legacy single-JSON bundle (string or bytes). The
+ * returned story has `thumbnailId` cleared; pass the blob to the store so it
+ * re-saves it under a fresh id.
  */
 export async function importStoryBundle(
+  data: ArrayBuffer | Uint8Array | string,
+): Promise<{ story: Story; thumbnailBlob: Blob | null }> {
+  if (typeof data === "string") return importLegacyStoryJSON(data);
+
+  const bytes = toBytes(data);
+  if (!isZip(bytes)) {
+    return importLegacyStoryJSON(new TextDecoder().decode(bytes));
+  }
+
+  let zip: JSZip;
+  try {
+    zip = await JSZip.loadAsync(bytes);
+  } catch {
+    throw new Error("Invalid story file — could not read the archive.");
+  }
+
+  const manifestFile = zip.file("manifest.json");
+  if (!manifestFile) {
+    throw new Error("Invalid story bundle — missing manifest.json.");
+  }
+
+  let manifest: Record<string, unknown>;
+  try {
+    manifest = JSON.parse(await manifestFile.async("string"));
+  } catch {
+    throw new Error("Invalid story bundle — manifest.json is not valid JSON.");
+  }
+  migrateStoryManifest(manifest);
+
+  // The story lives in story.json; fall back to an inline `story` for the
+  // earlier zip layout that embedded it in the manifest.
+  let storyRaw: unknown;
+  const storyFile = zip.file("story.json");
+  if (storyFile) {
+    try {
+      storyRaw = JSON.parse(await storyFile.async("string"));
+    } catch {
+      throw new Error("Invalid story bundle — story.json is not valid JSON.");
+    }
+  } else if (manifest.story !== undefined) {
+    storyRaw = manifest.story;
+  } else {
+    throw new Error("Invalid story bundle — missing story.json.");
+  }
+
+  const story = validateStory(storyRaw);
+
+  const thumbnailMeta = manifest.thumbnail as { mime: string } | undefined;
+  let thumbnailBlob: Blob | null = null;
+  if (thumbnailMeta) {
+    const entry = zip.file("thumbnail");
+    if (entry) {
+      // Re-wrap with the recorded mime — JSZip's blob output has no type.
+      const raw = await entry.async("blob");
+      thumbnailBlob = new Blob([raw], { type: thumbnailMeta.mime });
+    }
+  }
+
+  const remapped = remapStoryIds(story);
+  remapped.thumbnailId = undefined;
+  return { story: remapped, thumbnailBlob };
+}
+
+/** Legacy path: the original single-JSON bundle with a base64-embedded thumbnail. */
+async function importLegacyStoryJSON(
   json: string,
 ): Promise<{ story: Story; thumbnailBlob: Blob | null }> {
   let parsed: unknown;
@@ -231,15 +320,12 @@ export async function importStoryBundle(
     throw new Error("Invalid JSON — could not parse the file.");
   }
   if (typeof parsed !== "object" || parsed === null) {
-    throw new Error("Invalid format — expected a story bundle object.");
+    throw new Error("Invalid format — expected a story bundle.");
   }
-
   const raw = parsed as Record<string, unknown>;
-  if (raw.kind !== "story") {
-    throw new Error('Invalid bundle — "kind" must be "story".');
-  }
+  migrateStoryManifest(raw);
 
-  const bundle = migrateStoryBundle(raw);
+  const bundle = raw as unknown as LegacyStoryBundle;
   const story = validateStory(bundle.story);
 
   let thumbnailBlob: Blob | null = null;
@@ -250,6 +336,5 @@ export async function importStoryBundle(
 
   const remapped = remapStoryIds(story);
   remapped.thumbnailId = undefined;
-
   return { story: remapped, thumbnailBlob };
 }

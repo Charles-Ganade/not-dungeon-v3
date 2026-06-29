@@ -23,7 +23,9 @@ export function Content() {
     input.value = "";
     if (!file) return;
     try {
-      const { story, thumbnailBlob } = await importStoryBundle(await file.text());
+      const { story, thumbnailBlob } = await importStoryBundle(
+        await file.arrayBuffer(),
+      );
       await libraryStore.addStory(story, thumbnailBlob ?? undefined);
       toast.success(`Imported story "${story.name}".`);
     } catch (err) {
@@ -89,7 +91,7 @@ export function Content() {
             <input
               type="file"
               class="hidden"
-              accept="application/json,.json"
+              accept=".zip,.json,application/zip,application/json"
               onChange={handleImportStory}
             />
           </label>
