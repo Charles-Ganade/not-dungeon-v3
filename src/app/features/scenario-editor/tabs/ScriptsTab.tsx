@@ -4,10 +4,10 @@ import {
   inputHookContext,
   outputHookContext,
 } from "@/core/types";
-import { useCreateScenario } from "../context";
+import { useScenarioEditor } from "../context";
 
 export function ScriptsTab() {
-  const { newScenario, setNewScenario } = useCreateScenario();
+  const { scenario, setScenario } = useScenarioEditor();
 
   return (
     <div class="tab-content bg-base-200 p-6">
@@ -21,11 +21,11 @@ export function ScriptsTab() {
         <div class="tab-content bg-base-100 border-base-300 border-t-0 p-4">
           <CodeEditor
             name="input"
-            value={newScenario.scripts.input}
+            value={scenario.scripts.input}
             onChange={(v) => {
-              setNewScenario("scripts", "input", v);
+              setScenario("scripts", "input", v);
             }}
-            sharedLib={newScenario.scripts.library}
+            sharedLib={scenario.scripts.library}
             sharedLibPath="library.js"
             ambientTypes={inputHookContext}
             class="w-full min-h-128 h-full"
@@ -40,11 +40,11 @@ export function ScriptsTab() {
         <div class="tab-content bg-base-100 border-base-300 border-t-0 p-4">
           <CodeEditor
             name="buildContext"
-            value={newScenario.scripts.buildContext}
+            value={scenario.scripts.buildContext}
             onChange={(v) => {
-              setNewScenario("scripts", "buildContext", v);
+              setScenario("scripts", "buildContext", v);
             }}
-            sharedLib={newScenario.scripts.library}
+            sharedLib={scenario.scripts.library}
             sharedLibPath="library.js"
             ambientTypes={buildContextHookContext}
             class="w-full min-h-128"
@@ -60,11 +60,11 @@ export function ScriptsTab() {
         <div class="tab-content bg-base-100 border-base-300 border-t-0 p-4">
           <CodeEditor
             name="output"
-            value={newScenario.scripts.output}
+            value={scenario.scripts.output}
             onChange={(v) => {
-              setNewScenario("scripts", "output", v);
+              setScenario("scripts", "output", v);
             }}
-            sharedLib={newScenario.scripts.library}
+            sharedLib={scenario.scripts.library}
             sharedLibPath="library.js"
             ambientTypes={outputHookContext}
             class="w-full min-h-128"
@@ -80,9 +80,9 @@ export function ScriptsTab() {
         <div class="tab-content bg-base-100 border-base-300 border-t-0 p-4">
           <CodeEditor
             name="library"
-            value={newScenario.scripts.library}
+            value={scenario.scripts.library}
             onChange={(v) => {
-              setNewScenario("scripts", "library", v);
+              setScenario("scripts", "library", v);
             }}
             class="w-full min-h-128"
           />

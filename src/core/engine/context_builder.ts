@@ -194,53 +194,9 @@ export function validateActiveMemories(
   });
 }
 
-/**
- * Walks the active path and builds the story history string,
- * substituting memory summaries for the message segments they cover.
- *
- * Format:
- *   [Summary: ...] — for a summarised segment
- *   > {text}       — for a user/player message
- *   {text}         — for an assistant/story message
- * System-role messages are omitted (they were hook injections).
- */
-function buildHistoryString(
-  activePath: HistoryMessage[],
-  activeMemories: Memory[],
-): string {
-  if (activePath.length === 0) return "";
-
-  const memoryByFirstId = new Map<string, Memory>();
-  for (const memory of activeMemories) {
-    if (memory.messageIds.length > 0) {
-      memoryByFirstId.set(memory.messageIds[0], memory);
-    }
-  }
-  const memorizedIds = new Set(activeMemories.flatMap((m) => m.messageIds));
-
-  const parts: string[] = [];
-  const skipped = new Set<string>();
-
-  for (const message of activePath) {
-    if (skipped.has(message.id)) continue;
-
-    const memory = memoryByFirstId.get(message.id);
-    if (memory) {
-      parts.push(`[Summary: ${memory.content}]`);
-      for (const id of memory.messageIds) skipped.add(id);
-      continue;
-    }
-
-    if (memorizedIds.has(message.id)) continue;
-
-    if (message.role === "user") {
-      parts.push(`> ${message.text}`);
-    } else if (message.role === "assistant") {
-      parts.push(message.text);
-    }
-  }
-
-  return parts.join("\n\n");
+/** Sums the token counts of every message's content (uses the cached tokenizer). */
+function sumTokens(messages: LLMMessage[]): number {
+  return messages.reduce((sum, msg) => sum + countTokens(msg.content), 0);
 }
 
 /**
@@ -335,20 +291,16 @@ export function buildDefaultContext(
   });
 
   const systemMsg = systemParts.join("\n\n");
-  let currentEstimate = countTokens(systemMsg);
-  for (const msg of injectedMessages) {
-    currentEstimate += countTokens(msg.content);
-  }
-  for (const msg of historyMessages) {
-    currentEstimate += countTokens(msg.content);
-  }
+  // Count the system prompt + injected messages once and reuse it across the
+  // pre-/post-kicker and truncation estimates. The system prompt concatenates
+  // instructions, essentials, memories, and story cards, so it's the largest
+  // single string here — counting it more than once is the main waste.
+  const headerTokens = countTokens(systemMsg) + sumTokens(injectedMessages);
+  const currentEstimate = headerTokens + sumTokens(historyMessages);
 
   const availableForKicker =
     config.params.contextWindow - currentEstimate - 1000;
-  const { text: kickerText, estimatedTokens: kickerTokens } = formatKickerText(
-    config,
-    availableForKicker,
-  );
+  const { text: kickerText } = formatKickerText(config, availableForKicker);
 
   if (historyMessages.length > 0) {
     const lastMsg = historyMessages[historyMessages.length - 1];
@@ -371,13 +323,9 @@ export function buildDefaultContext(
     ...historyMessages,
   ];
 
-  let estimatedTokens = countTokens(systemMsg);
-  for (const msg of injectedMessages) {
-    estimatedTokens += countTokens(msg.content);
-  }
-  for (const msg of historyMessages) {
-    estimatedTokens += countTokens(msg.content);
-  }
+  // Only the history changed (the kicker mutated its last message); the header
+  // count is unchanged, so reuse it rather than re-counting the system prompt.
+  let estimatedTokens = headerTokens + sumTokens(historyMessages);
 
   const fitResult = validateContextFit(
     estimatedTokens,
@@ -392,10 +340,7 @@ export function buildDefaultContext(
     messages = truncated;
     truncatedMessageCount = removedCount;
 
-    estimatedTokens = 0;
-    for (const msg of messages) {
-      estimatedTokens += countTokens(msg.content);
-    }
+    estimatedTokens = sumTokens(messages);
   }
 
   return {

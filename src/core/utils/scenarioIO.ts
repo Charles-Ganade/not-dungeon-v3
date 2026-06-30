@@ -4,7 +4,7 @@ import type { StoryCard, ScriptBundle, ConfigOverride } from "@/core/types/stori
 import type { EnabledPlugin, PluginManifest } from "@/core/types/plugins";
 import { makeDefaultScenario } from "@/core/defaults";
 import { getThumbnailBlob } from "@/services/db";
-import { isZip, toBytes } from "@/utils";
+import { isZip, slugify, toBytes } from "@/utils";
 import { exportPlugin, importPlugin } from "./pluginIO";
 
 const SCENARIO_BUNDLE_VERSION = 1;
@@ -28,15 +28,6 @@ interface ScenarioManifest {
 }
 
 type ScenarioInput = Omit<Scenario, "id" | "createdAt" | "updatedAt">;
-
-function slugify(value: string): string {
-  const base = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return base || "scenario";
-}
 
 function splitIfString(value: string[] | string): string[] {
   if (Array.isArray(value)) return value.map((s) => s.trim()).filter(Boolean);
@@ -77,7 +68,7 @@ export async function exportScenario(
 
   for (const manifest of plugins) {
     const pluginFile = await exportPlugin(manifest);
-    zip.file(`plugins/${slugify(manifest.id)}.plugin.zip`, pluginFile);
+    zip.file(`plugins/${slugify(manifest.id, "plugin")}.plugin.zip`, pluginFile);
   }
 
   const manifest: ScenarioManifest = {
@@ -92,7 +83,7 @@ export async function exportScenario(
   zip.file("manifest.json", JSON.stringify(manifest, null, 2));
 
   const blob = await zip.generateAsync({ type: "blob" });
-  return new File([blob], `${slugify(scenario.name)}.scenario.zip`, {
+  return new File([blob], `${slugify(scenario.name, "scenario")}.scenario.zip`, {
     type: "application/zip",
   });
 }

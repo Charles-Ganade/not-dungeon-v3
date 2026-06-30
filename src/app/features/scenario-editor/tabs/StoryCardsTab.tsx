@@ -3,14 +3,14 @@ import { cn } from "@/utils";
 import { BsViewStacked } from "solid-icons/bs";
 import { FiDownload, FiGrid, FiList, FiSearch, FiUpload } from "solid-icons/fi";
 import { createMemo, createSignal } from "solid-js";
-import { useCreateScenario } from "../context";
+import { useScenarioEditor } from "../context";
 import { makeDefaultStoryCard } from "@/core/defaults";
 import { importStoryCards, exportStoryCards } from "@/core/utils/storyCardIO";
 import { toast } from "solid-sonner";
 import { unwrap } from "solid-js/store";
 
 export function StoryCardsTab() {
-  const { newScenario, setNewScenario } = useCreateScenario();
+  const { scenario, setScenario } = useScenarioEditor();
   const [search, setSearch] = createSignal("");
   const [viewType, setViewType] = createSignal<"grid" | "stack" | "list">(
     "grid",
@@ -18,7 +18,7 @@ export function StoryCardsTab() {
 
   const filteredStoryCards = createMemo(() => {
     const query = search().toLowerCase().trim();
-    const cards = () => [...newScenario.storyCards];
+    const cards = () => [...scenario.storyCards];
     const filtered = !query
       ? cards()
       : cards().filter((card) => {
@@ -40,7 +40,7 @@ export function StoryCardsTab() {
     reader.onload = () => {
       try {
         const cards = importStoryCards(reader.result as string);
-        setNewScenario("storyCards", (c) => [...c, ...cards]);
+        setScenario("storyCards", (c) => [...c, ...cards]);
       } catch (err) {
         toast.error((err as Error).message);
       }
@@ -49,7 +49,7 @@ export function StoryCardsTab() {
   };
 
   const handleExport = () => {
-    const file = exportStoryCards(unwrap(newScenario.storyCards));
+    const file = exportStoryCards(unwrap(scenario.storyCards));
     const url = URL.createObjectURL(file);
     const a = document.createElement("a");
     a.href = url;
@@ -115,27 +115,26 @@ export function StoryCardsTab() {
         </div>
         <StoryCardsGrid
           storyCards={filteredStoryCards()}
-          scenario={newScenario}
+          scenario={scenario}
           viewType={viewType()}
           onDelete={(card) =>
-            setNewScenario("storyCards", (cards) =>
+            setScenario("storyCards", (cards) =>
               cards.filter((c) => c.id !== card.id),
             )
           }
           onSave={(card) => {
-            const index = newScenario.storyCards.findIndex(
+            const index = scenario.storyCards.findIndex(
               (item) => item.id === card.id,
             );
             if (index !== -1) {
-              setNewScenario("storyCards", index, card);
-            } else
-              setNewScenario("storyCards", newScenario.storyCards.length, card);
+              setScenario("storyCards", index, card);
+            } else setScenario("storyCards", scenario.storyCards.length, card);
           }}
           onDuplicate={(card) => {
             const { id, ...other } = card;
-            setNewScenario(
+            setScenario(
               "storyCards",
-              newScenario.storyCards.length,
+              scenario.storyCards.length,
               makeDefaultStoryCard(other),
             );
           }}

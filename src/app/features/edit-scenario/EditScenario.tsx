@@ -3,19 +3,10 @@ import { libraryStore } from "@/store";
 import { useNavigate, useParams } from "@solidjs/router";
 import { createMemo, createSignal, onMount } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
-import { DefaultScenario, EditScenarioContext } from "./context";
-import { Flex, Text } from "@/app/components";
-import { FiArrowLeft, FiCode, FiList, FiSave } from "solid-icons/fi";
 import { makeDefaultScenario } from "@/core/defaults";
 import { toast } from "solid-sonner";
-import { BsTextCenter, BsPuzzleFill } from "solid-icons/bs";
-import { RiDocumentFilePaperFill } from "solid-icons/ri";
-import { DetailsTab } from "./tabs/DetailsTab";
-import { ScriptsTab } from "./tabs/ScriptsTab";
-import { StoryCardsTab } from "./tabs/StoryCardsTab";
-import { StoryTab } from "./tabs/StoryTab";
-import { PluginsTab } from "./tabs/PluginsTab";
 import { isEqual } from "lodash";
+import { DefaultScenario, ScenarioEditor } from "@/app/features/scenario-editor";
 
 export function EditScenario() {
   const { id } = useParams();
@@ -68,11 +59,7 @@ export function EditScenario() {
     try {
       const thumbnail = thumbBlob();
       const resolved = makeDefaultScenario(unwrap(currentScenario));
-      const scenario = await libraryStore.editScenario(
-        id!,
-        resolved,
-        thumbnail ?? undefined,
-      );
+      await libraryStore.editScenario(id!, resolved, thumbnail ?? undefined);
       navigator(-1);
     } catch (e) {
       toast.error((e as any).message);
@@ -80,93 +67,16 @@ export function EditScenario() {
   };
 
   return (
-    <EditScenarioContext.Provider
-      value={{ currentScenario, setCurrentScenario, thumbBlob, setThumbBlob }}
-    >
-      <Flex
-        justify={"center"}
-        class="flex-1 grow gap-0 overflow-x-hidden min-h-0"
-      >
-        <Flex direction={"col"} class="w-full max-w-4xl gap-4 p-6">
-          <Flex align={"center"} justify={"between"} class="border-b py-2">
-            <div class="flex items-center gap-4">
-              <button class="btn" onClick={() => navigator(-1)}>
-                <Text variant={"h5"} class="text-inherit">
-                  <FiArrowLeft />
-                </Text>
-              </button>
-              <Text variant={"h3"}>Edit Scenario</Text>
-            </div>
-            <button
-              class="btn btn-primary"
-              disabled={!isEdited()}
-              onClick={handleSave}
-            >
-              <Text variant={"h5"} class="text-inherit">
-                <FiSave />
-              </Text>
-              <Text class="text-inherit">Save</Text>
-            </button>
-          </Flex>
-          <div class="w-full h-fit min-h-0">
-            <div class="tabs tabs-box">
-              <label class="tab">
-                <input type="radio" name="scenario-tab" checked />
-                <div class="flex items-center gap-2">
-                  <Text class="text-inherit">
-                    <FiList />
-                  </Text>
-                  <Text class="text-inherit">Details</Text>
-                </div>
-              </label>
-              <DetailsTab />
-              <label class="tab">
-                <input type="radio" name="scenario-tab" />
-                <div class="flex items-center gap-2">
-                  <Text class="text-inherit">
-                    <BsTextCenter />
-                  </Text>
-                  <Text class="text-inherit">Story</Text>
-                </div>
-              </label>
-              <StoryTab />
-
-              <label class="tab">
-                <input type="radio" name="scenario-tab" />
-                <div class="flex items-center gap-2">
-                  <Text class="text-inherit">
-                    <RiDocumentFilePaperFill />
-                  </Text>
-                  <Text class="text-inherit">Story Cards</Text>
-                </div>
-              </label>
-              <StoryCardsTab />
-
-              <label class="tab">
-                <input type="radio" name="scenario-tab" />
-                <div class="flex items-center gap-2">
-                  <Text class="text-inherit">
-                    <FiCode />
-                  </Text>
-                  <Text class="text-inherit">Scripts</Text>
-                </div>
-              </label>
-              <ScriptsTab />
-
-              <label class="tab">
-                <input type="radio" name="scenario-tab" />
-                <div class="flex items-center gap-2">
-                  <Text class="text-inherit">
-                    <BsPuzzleFill />
-                  </Text>
-                  <Text class="text-inherit">Plugins</Text>
-                </div>
-              </label>
-              <PluginsTab />
-            </div>
-          </div>
-        </Flex>
-      </Flex>
-    </EditScenarioContext.Provider>
+    <ScenarioEditor
+      mode="edit"
+      title="Edit Scenario"
+      scenario={currentScenario}
+      setScenario={setCurrentScenario}
+      thumbBlob={thumbBlob}
+      setThumbBlob={setThumbBlob}
+      saveDisabled={!isEdited()}
+      onSave={handleSave}
+      onBack={() => navigator(-1)}
+    />
   );
 }

@@ -3,18 +3,13 @@ import { makeDefaultStory } from "@/core/defaults";
 import { Story } from "@/core/types";
 import { getThumbnailBlob } from "@/services/db";
 import { libraryStore } from "@/store";
-import { FiEdit, FiSave, FiX } from "solid-icons/fi";
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-  Show,
-} from "solid-js";
+import { FiSave } from "solid-icons/fi";
+import { createEffect, createMemo, createSignal, on, onCleanup } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 // @ts-ignore
 import TextareaAutosize from "solid-textarea-autosize";
+import { StoryThumbnailHeader } from "./StoryThumbnailHeader";
+import { ConfirmCloseModal } from "./ConfirmCloseModal";
 
 interface EditStoryModalProps {
   open: boolean;
@@ -98,38 +93,17 @@ export function EditStoryModal(props: EditStoryModalProps) {
       closeOnOverlayClick={false}
       closeOnEsc={false}
     >
-      <figure class="group w-full h-64 relative overflow-hidden rounded-t-2xl bg-secondary  ">
-        <Show when={thumbUrl()}>
-          <img src={thumbUrl()!} class="w-full h-full object-cover" />
-        </Show>
-        <div class="absolute top-0 right-0 p-6 z-10">
-          <button
-            onClick={() => {
-              if (isChanged()) {
-                setConfirmModalOpen(true);
-              } else {
-                close();
-              }
-            }}
-            class="btn btn-outline border-2 btn-error btn-circle text-error hover:text-error-content"
-          >
-            <Text variant={"h4"} class="text-inherit">
-              <FiX />
-            </Text>
-          </button>
-        </div>
-        <div class="absolute inset-0 bg-base-300/80 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <label
-            class="btn btn-lg btn-circle btn-primary"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Text>
-              <FiEdit />
-            </Text>
-            <input type="file" class="hidden" onInput={handleFile} />
-          </label>
-        </div>
-      </figure>
+      <StoryThumbnailHeader
+        thumbUrl={thumbUrl()}
+        onFile={handleFile}
+        onClose={() => {
+          if (isChanged()) {
+            setConfirmModalOpen(true);
+          } else {
+            close();
+          }
+        }}
+      />
       <Flex direction={"col"} class="p-6 flex-1 min-h-0">
         <Flex justify={"between"} align={"center"} class="h-fit">
           <Text variant={"h3"} weight={"bold"}>
@@ -205,28 +179,11 @@ export function EditStoryModal(props: EditStoryModalProps) {
           </Flex>
         </Flex>
       </Flex>
-      <Modal
-        class="p-0! grid bg-base-200 shadow"
+      <ConfirmCloseModal
         open={confirmModalOpen()}
-        onClose={() => setConfirmModalOpen(false)}
-      >
-        <Flex direction={"col"} class="p-6 gap-4">
-          <Text variant={"h3"} weight={"bold"}>
-            Changes will not be saved. Close anyway?
-          </Text>
-          <Flex class="p-2">
-            <button
-              class="btn btn-lg flex-1"
-              onClick={() => setConfirmModalOpen(false)}
-            >
-              <Text>Cancel</Text>
-            </button>
-            <button class="btn btn-error flex-1" onClick={close}>
-              <Text>Close</Text>
-            </button>
-          </Flex>
-        </Flex>
-      </Modal>
+        onCancel={() => setConfirmModalOpen(false)}
+        onConfirm={close}
+      />
     </Modal>
   );
 }

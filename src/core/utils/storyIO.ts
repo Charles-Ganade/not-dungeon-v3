@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import type { HistoryMessage, Story } from "@/core/types/stories";
 import { getThumbnailBlob } from "@/services/db";
-import { dataURLToBlob, isZip, toBytes } from "@/utils";
+import { dataURLToBlob, isZip, slugify, toBytes } from "@/utils";
 
 const STORY_BUNDLE_VERSION = 1;
 
@@ -33,15 +33,6 @@ interface LegacyStoryBundle {
   thumbnails?: Record<string, string>;
 }
 
-function slugify(name: string): string {
-  const base = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return base || "story";
-}
-
 /**
  * Serializes a story to a downloadable `.story.zip`: a small `manifest.json`,
  * the full story in `story.json`, and the thumbnail as a real image file.
@@ -71,7 +62,7 @@ export async function exportStoryBundle(story: Story): Promise<File> {
   zip.file("manifest.json", JSON.stringify(manifest, null, 2));
 
   const blob = await zip.generateAsync({ type: "blob" });
-  return new File([blob], `${slugify(story.name)}.story.zip`, {
+  return new File([blob], `${slugify(story.name, "story")}.story.zip`, {
     type: "application/zip",
   });
 }

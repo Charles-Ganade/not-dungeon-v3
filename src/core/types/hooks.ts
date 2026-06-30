@@ -55,6 +55,37 @@ export interface BaseHookContext {
   removeMemory(id: string): void
 
   /**
+   * Adds a story card to the story. The addition is enqueued as a
+   * storyCard:add delta inside the current transaction, so it undoes
+   * together with the turn.
+   */
+  addStoryCard(card: Omit<StoryCard, "id" | "createdAt" | "updatedAt">): void;
+
+  /**
+   * Edits an existing story card.
+   * @param id id of the story card to edit
+   * @param card the new contents of the card
+   */
+  editStoryCard(
+    id: string,
+    card: Omit<StoryCard, "id" | "createdAt" | "updatedAt"> |
+    ((prev:Omit<StoryCard, "id" | "createdAt" | "updatedAt">) =>
+      Omit<StoryCard, "id" | "createdAt" | "updatedAt">)): void
+
+  /**
+   * Deletes an existing story card
+   * @param id id of the story card to remove
+   */
+  removeStoryCard(id: string): void;
+
+  /**
+   * If set to `true`, this stops the default
+   * auto-summarizer from firing this turn. May be set from any hook;
+   * the turn is summarized only if no hook suppressed it.
+   */
+  suppressDefaultSummarizer: boolean;
+
+  /**
    * Persistent key-value store scoped to this story.
    * Survives across turns. Not delta-tracked — changes are written
    * directly to story.memory and persisted with the story.
@@ -173,34 +204,4 @@ export interface OutputHookContext extends BaseHookContext {
     readonly user: string | null;
     readonly assistant: string;
   }
-
-  /**
-   * Adds a story card to the story. The addition is enqueued as a
-   * storyCard:add delta inside the current transaction, so it undoes
-   * together with the AI response.
-   */
-  addStoryCard(card: Omit<StoryCard, "id" | "createdAt" | "updatedAt">): void;
-
-  /**
-   * Edits an existing story card.
-   * @param id id of the story card to edit
-   * @param card the new contents of the card
-   */
-  editStoryCard(
-    id: string, 
-    card: Omit<StoryCard, "id" | "createdAt" | "updatedAt"> | 
-    ((prev:Omit<StoryCard, "id" | "createdAt" | "updatedAt">) => 
-      Omit<StoryCard, "id" | "createdAt" | "updatedAt">)): void
-
-  /**
-   * Deletes an existing story card
-   * @param id id of the story card to remove
-   */
-  removeStoryCard(id: string): void;
-
-  /**
-   * If set to `true`, this stops the default 
-   * auto-summarizer from firing this turn.
-   */
-  suppressDefaultSummarizer: boolean;
 }

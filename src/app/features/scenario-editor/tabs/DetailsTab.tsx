@@ -1,18 +1,19 @@
 import { Text } from "@/app/components";
 import { createMemo, createSignal, For, Show } from "solid-js";
-import { FiEdit, FiUpload, FiX } from "solid-icons/fi";
-import { useEditScenario } from "../context";
+import { FiDownload, FiEdit, FiUpload, FiX } from "solid-icons/fi";
+import { useScenarioEditor } from "../context";
 // @ts-ignore
 import TextareaAutosize from "solid-textarea-autosize";
-import { exportScenario } from "@/core/utils/scenarioIO";
+import { makeDefaultScenario } from "@/core/defaults";
+import { exportScenario, importScenario } from "@/core/utils/scenarioIO";
 import { unwrap } from "solid-js/store";
-import { pluginsStore } from "@/store";
 import { toast } from "solid-sonner";
+import { pluginsStore } from "@/store";
 import type { PluginManifest } from "@/core/types/plugins";
 
 export function DetailsTab() {
-  const { currentScenario, setCurrentScenario, thumbBlob, setThumbBlob } =
-    useEditScenario();
+  const { mode, scenario, setScenario, thumbBlob, setThumbBlob } =
+    useScenarioEditor();
   const [newTag, setNewTag] = createSignal("");
 
   const thumbUrl = createMemo(() =>
@@ -29,15 +30,49 @@ export function DetailsTab() {
     setThumbBlob(file);
   };
 
+  const handleImport = async (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    try {
+      const { scenario, thumbnailBlob, bundledPlugins } = await importScenario(
+        await file.arrayBuffer(),
+      );
+
+      // Install bundled plugins, keeping any already-installed copy.
+      let installed = 0;
+      let kept = 0;
+      for (const manifest of bundledPlugins) {
+        if (pluginsStore.installed.some((p) => p.id === manifest.id)) {
+          kept++;
+        } else {
+          await pluginsStore.install(manifest);
+          installed++;
+        }
+      }
+
+      setThumbBlob(thumbnailBlob);
+      setScenario(makeDefaultScenario(scenario));
+
+      const parts = [`Imported "${scenario.name}".`];
+      if (installed) parts.push(`${installed} plugin(s) installed.`);
+      if (kept) parts.push(`${kept} already installed.`);
+      toast.success(parts.join(" "));
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
   const handleExport = async () => {
     try {
-      const scenario = unwrap(currentScenario);
+      const resolved = unwrap(scenario);
 
       // Resolve the scenario's enabled plugins to their installed manifests so
       // they can be bundled. Warn about any that are no longer installed.
       const manifests: PluginManifest[] = [];
       const missing: string[] = [];
-      for (const enabled of scenario.enabledPlugins ?? []) {
+      for (const enabled of resolved.enabledPlugins ?? []) {
         const manifest = pluginsStore.installed.find(
           (p) => p.id === enabled.pluginId,
         );
@@ -50,7 +85,7 @@ export function DetailsTab() {
         );
       }
 
-      const file = await exportScenario(scenario, manifests);
+      const file = await exportScenario(resolved, manifests);
       const url = URL.createObjectURL(file);
       const a = document.createElement("a");
       a.href = url;
@@ -61,6 +96,7 @@ export function DetailsTab() {
       toast.error((err as Error).message);
     }
   };
+
   return (
     <div class="tab-content bg-base-100">
       <figure class="group w-full h-64 relative overflow-hidden bg-secondary  ">
@@ -94,9 +130,9 @@ export function DetailsTab() {
             type="text"
             class="input w-full"
             placeholder="Scenario Name"
-            value={currentScenario.name}
+            value={scenario.name}
             onInput={({ currentTarget }) =>
-              setCurrentScenario("name", currentTarget.value)
+              setScenario("name", currentTarget.value)
             }
           />
         </div>
@@ -106,10 +142,10 @@ export function DetailsTab() {
           </Text>
           <TextareaAutosize
             class="textarea w-full h-32 resize-none"
-            value={currentScenario.description}
+            value={scenario.description}
             // @ts-ignore
             onInput={({ currentTarget }) => {
-              setCurrentScenario("description", currentTarget.value);
+              setScenario("description", currentTarget.value);
             }}
           />
         </div>
@@ -129,9 +165,9 @@ export function DetailsTab() {
                   e.preventDefault();
                   const value = newTag().trim();
                   if (!value) return;
-                  setCurrentScenario(
+                  setScenario(
                     "tags",
-                    currentScenario.tags.length,
+                    scenario.tags.length,
                     newTag().toLowerCase(),
                   );
                   setNewTag("");
@@ -140,15 +176,15 @@ export function DetailsTab() {
             />
           </div>
         </div>
-        <Show when={currentScenario.tags?.length > 0}>
+        <Show when={scenario.tags?.length > 0}>
           <div class="w-full flex flex-wrap gap-1">
-            <For each={currentScenario.tags}>
+            <For each={scenario.tags}>
               {(tag) => (
                 <span class="badge badge-lg badge-accent rounded-full">
                   <button
                     class="cursor-pointer"
                     onClick={() => {
-                      setCurrentScenario("tags", (tags) =>
+                      setScenario("tags", (tags) =>
                         tags.filter((t) => t !== tag),
                       );
                     }}
@@ -162,12 +198,30 @@ export function DetailsTab() {
           </div>
         </Show>
         <div class="w-full flex justify-end">
-          <button class="btn btn-primary btn-large" onClick={handleExport}>
-            <Text>
-              <FiUpload />
-            </Text>
-            <Text>Export</Text>
-          </button>
+          <Show
+            when={mode === "create"}
+            fallback={
+              <button class="btn btn-primary btn-large" onClick={handleExport}>
+                <Text>
+                  <FiUpload />
+                </Text>
+                <Text>Export</Text>
+              </button>
+            }
+          >
+            <label class="btn btn-primary btn-large">
+              <input
+                type="file"
+                accept=".zip,.json,application/zip,application/json"
+                class="hidden"
+                onChange={handleImport}
+              />
+              <Text>
+                <FiDownload />
+              </Text>
+              <Text>Import</Text>
+            </label>
+          </Show>
         </div>
       </div>
     </div>

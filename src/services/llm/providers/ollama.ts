@@ -2,6 +2,7 @@ import { register } from "../registry";
 import { LLMError } from "../errors";
 import { LLMErrorCode } from "../types";
 import type { LLMProvider, LLMChunk } from "../types";
+import { createThinkingTagSplitter, streamErrorToChunk } from "../streaming";
 import { Ollama } from "ollama/browser";
 
 const getOllama = (endpoint: string) =>
@@ -47,7 +48,7 @@ const ollama: LLMProvider = {
         think: params.thinkingEnabled
       })
 
-      let isThinkingTagMode = false;
+      const splitThinking = createThinkingTagSplitter();
 
       for await (const chunk of stream) {
         const thinkingDelta = chunk.message?.thinking;
@@ -57,51 +58,13 @@ const ollama: LLMProvider = {
 
         const contentDelta = chunk.message?.content;
         if (typeof contentDelta === "string" && contentDelta) {
-          let remaining = contentDelta;
-
-          while (remaining) {
-            if (isThinkingTagMode) {
-              const endIndex = remaining.indexOf("</think>");
-              if (endIndex !== -1) {
-                const chunk = remaining.slice(0, endIndex);
-                if (chunk) yield { type: "thinking", delta: chunk };
-                isThinkingTagMode = false;
-                remaining = remaining.slice(endIndex + 8);
-              } else {
-                yield { type: "thinking", delta: remaining };
-                remaining = "";
-              }
-            } else {
-              const startIndex = remaining.indexOf("<think>");
-              if (startIndex !== -1) {
-                const chunk = remaining.slice(0, startIndex);
-                if (chunk) yield { type: "text", delta: chunk };
-                isThinkingTagMode = true;
-                remaining = remaining.slice(startIndex + 7);
-              } else {
-                yield { type: "text", delta: remaining };
-                remaining = "";
-              }
-            }
-          }
+          yield* splitThinking(contentDelta);
         }
 
         if (chunk.done) return;
       }
     } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        yield {
-          type: "error",
-          code: LLMErrorCode.Aborted,
-          message: "Request aborted",
-        };
-        return;
-      }
-      yield {
-        type: "error",
-        code: LLMErrorCode.NetworkError,
-        message: (err as Error).message,
-      };
+      yield streamErrorToChunk(err);
     }
   },
 };

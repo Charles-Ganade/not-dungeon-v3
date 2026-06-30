@@ -45,6 +45,38 @@ interface BaseHookContext {
   }): void;
   editMemory(id: string, content: string | ((prev: string) => string)): void;
   removeMemory(id: string): void;
+  addStoryCard(card: {
+    title: string;
+    content: string;
+    triggers: string[];
+    tags: string[];
+    enabled: boolean;
+  }): void;
+  editStoryCard(
+    id: string,
+    card: {
+      title: string;
+      content: string;
+      triggers: string[];
+      tags: string[];
+      enabled: boolean;
+    } |
+    ((prev: {
+      title: string;
+      content: string;
+      triggers: string[];
+      tags: string[];
+      enabled: boolean;
+    }) => {
+      title: string;
+      content: string;
+      triggers: string[];
+      tags: string[];
+      enabled: boolean;
+    })
+  ): void;
+  removeStoryCard(id: string): void;
+  suppressDefaultSummarizer: boolean;
   kvMemory: {
     get<T = unknown>(key: string): T | undefined;
     set<T = unknown>(key: string, value: T): void;
@@ -131,37 +163,5 @@ interface OutputHookContext extends BaseHookContext {
     readonly user: string | null;
     readonly assistant: string;
   };
-  addStoryCard(card: {
-    title: string;
-    content: string;
-    triggers: string[];
-    tags: string[];
-    enabled: boolean;
-  }): void;
-  editStoryCard(
-    id: string, 
-    card: {
-      title: string;
-      content: string;
-      triggers: string[];
-      tags: string[];
-      enabled: boolean;
-    } | 
-    ((prev: {
-      title: string;
-      content: string;
-      triggers: string[];
-      tags: string[];
-      enabled: boolean;
-    }) => {
-      title: string;
-      content: string;
-      triggers: string[];
-      tags: string[];
-      enabled: boolean;
-    })
-  ): void;
-  removeStoryCard(id: string): void;
-  suppressDefaultSummarizer: boolean;
 }
 declare const ctx: OutputHookContext;` as HookContext;

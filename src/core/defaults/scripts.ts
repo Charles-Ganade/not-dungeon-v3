@@ -24,12 +24,16 @@ export const DEFAULT_SCRIPT_INPUT = `\
 //   ctx.currentTurnIds      — { user: string | null } (read-only)
 //   ctx.essentials          — the story's essentials field (mutable)
 //   ctx.scriptState         — persistent script state string (mutable)
+//   ctx.suppressDefaultSummarizer — set to true to skip auto-summarization (mutable)
 //   ctx.state               — read-only snapshot of messages, memories, story cards
 //   ctx.kvMemory            — persistent key-value store (get, set, delete, all)
 //   ctx.config              — resolved config (model, params, prompts)
 //   ctx.addMemory()         — enqueue a new memory delta
 //   ctx.editMemory()        — edit an existing memory delta
 //   ctx.removeMemory()      — delete a memory delta
+//   ctx.addStoryCard()      — enqueue a new story card delta
+//   ctx.editStoryCard()     — edit an existing story card delta
+//   ctx.removeStoryCard()   — delete a story card delta
 //   ctx.ai.stream()         — run a secondary AI call
 //   ctx.inject(text)        — inject a system message into the next request
 //   ctx.stop(reason?)       — stop the turn early and commit all prior changes
@@ -53,12 +57,16 @@ export const DEFAULT_SCRIPT_BUILD_CONTEXT = `\
 //   ctx.currentTurnIds      — { user: string | null } (read-only)
 //   ctx.essentials          — the story's essentials field (mutable)
 //   ctx.scriptState         — persistent script state string (mutable)
+//   ctx.suppressDefaultSummarizer — set to true to skip auto-summarization (mutable)
 //   ctx.state               — read-only snapshot of messages, memories, story cards
 //   ctx.kvMemory            — persistent key-value store (get, set, delete, all)
 //   ctx.config              — resolved config (model, params, prompts)
 //   ctx.addMemory()         — enqueue a new memory delta
 //   ctx.editMemory()        — edit an existing memory delta
 //   ctx.removeMemory()      — delete a memory delta
+//   ctx.addStoryCard()      — enqueue a new story card delta
+//   ctx.editStoryCard()     — edit an existing story card delta
+//   ctx.removeStoryCard()   — delete a story card delta
 //   ctx.ai.stream()         — run a secondary AI call
 //   ctx.stop(reason?)       — stop the turn early and commit all prior changes
 //   ctx.cancel(reason?)     — cancel the turn entirely

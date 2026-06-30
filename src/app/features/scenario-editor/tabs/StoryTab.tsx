@@ -1,11 +1,11 @@
 import { Text } from "@/app/components";
 import { FiInfo } from "solid-icons/fi";
-import { useCreateScenario } from "../context";
+import { useScenarioEditor } from "../context";
 // @ts-ignore
 import TextareaAutosize from "solid-textarea-autosize";
 
 export function StoryTab() {
-  const { newScenario, setNewScenario } = useCreateScenario();
+  const { scenario, setScenario } = useScenarioEditor();
   return (
     <div class="tab-content bg-base-200 p-6">
       <div class="flex flex-col gap-4">
@@ -23,10 +23,10 @@ export function StoryTab() {
           </div>
           <TextareaAutosize
             class="textarea w-full h-64 resize-none"
-            value={newScenario.openingPrompt}
+            value={scenario.openingPrompt}
             // @ts-ignore
             onInput={({ currentTarget }) => {
-              setNewScenario("openingPrompt", currentTarget.value);
+              setScenario("openingPrompt", currentTarget.value);
             }}
           />
         </div>
@@ -44,10 +44,10 @@ export function StoryTab() {
           </div>
           <TextareaAutosize
             class="textarea w-full h-64 resize-none"
-            value={newScenario.instructions}
+            value={scenario.instructions}
             // @ts-ignore
             onInput={({ currentTarget }) => {
-              setNewScenario("instructions", currentTarget.value);
+              setScenario("instructions", currentTarget.value);
             }}
           />
         </div>
@@ -65,10 +65,10 @@ export function StoryTab() {
           </div>
           <TextareaAutosize
             class="textarea w-full h-64 resize-none"
-            value={newScenario.essentials}
+            value={scenario.essentials}
             // @ts-ignore
             onInput={({ currentTarget }) => {
-              setNewScenario("essentials", currentTarget.value);
+              setScenario("essentials", currentTarget.value);
             }}
           />
         </div>
@@ -86,10 +86,10 @@ export function StoryTab() {
           </div>
           <TextareaAutosize
             class="textarea w-full h-64 resize-none"
-            value={newScenario.authorNotes}
+            value={scenario.authorNotes}
             // @ts-ignore
             onInput={({ currentTarget }) => {
-              setNewScenario("authorNotes", currentTarget.value);
+              setScenario("authorNotes", currentTarget.value);
             }}
           />
         </div>

@@ -6,7 +6,7 @@ import type {
   EnabledPlugin,
 } from "@/core/types/plugins";
 import type { ScriptBundle } from "@/core/types/stories";
-import { isZip, toBytes } from "@/utils";
+import { isZip, slugify, toBytes } from "@/utils";
 
 const PLUGIN_BUNDLE_VERSION = 1;
 
@@ -31,15 +31,6 @@ const HOOK_PHASES: (keyof ScriptBundle)[] = [
   "buildContext",
   "output",
 ];
-
-function slugify(value: string): string {
-  const base = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return base || "plugin";
-}
 
 function validateConfigSchema(value: unknown): PluginConfigField[] | undefined {
   if (value === undefined) return undefined;
@@ -171,7 +162,7 @@ export async function exportPlugin(manifest: PluginManifest): Promise<File> {
   zip.file("manifest.json", JSON.stringify(bundle, null, 2));
 
   const blob = await zip.generateAsync({ type: "blob" });
-  return new File([blob], `${slugify(manifest.id)}.plugin.zip`, {
+  return new File([blob], `${slugify(manifest.id, "plugin")}.plugin.zip`, {
     type: "application/zip",
   });
 }

@@ -311,6 +311,7 @@ async function generate(options: {
       parentId = finalUserMsg.id;
 
       resolveMemoryOperations(hookCtxs.input.memoriesOperations);
+      resolveStoryOperations(hookCtxs.input.storyCardOperations);
 
       if (hookCtxs.stopFlag.stopped) {
         sessionStore.commit();
@@ -402,6 +403,7 @@ async function generate(options: {
     }
 
     resolveMemoryOperations(buildCtx.memoriesOperations);
+    resolveStoryOperations(buildCtx.storyCardOperations);
 
     if (hookCtxs.stopFlag.stopped) {
       sessionStore.commit();
@@ -538,7 +540,13 @@ async function generate(options: {
       return;
     }
 
-    if (!outputCtx.suppressDefaultSummarizer) {
+    // Any hook may opt out of the end-of-turn summarizer; honor it if any did.
+    const suppressSummarizer =
+      hookCtxs.input.suppressDefaultSummarizer ||
+      buildCtx.suppressDefaultSummarizer ||
+      outputCtx.suppressDefaultSummarizer;
+
+    if (!suppressSummarizer) {
       const autoMemory = await summarizeHistory();
       if (autoMemory) {
         sessionStore.enqueue({

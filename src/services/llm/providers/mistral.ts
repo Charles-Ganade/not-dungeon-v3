@@ -1,7 +1,8 @@
 import { register } from "../registry";
-import { LLMError, responseToError } from "../errors";
+import { LLMError } from "../errors";
 import { LLMErrorCode } from "../types";
 import type { LLMProvider, LLMChunk } from "../types";
+import { createThinkingTagSplitter, streamErrorToChunk } from "../streaming";
 import { Mistral } from "@mistralai/mistralai";
 
 const MISTRAL_BASE = "https://api.mistral.ai/";
@@ -59,7 +60,7 @@ const mistral: LLMProvider = {
         { signal },
       );
 
-      let isThinkingTagMode = false;
+      const splitThinking = createThinkingTagSplitter();
 
       for await (const chunk of stream) {
         const delta = chunk.data.choices?.[0]?.delta;
@@ -74,48 +75,11 @@ const mistral: LLMProvider = {
         }
 
         if (typeof delta.content === "string" && delta.content) {
-          let remaining = delta.content;
-          while (remaining) {
-            if (isThinkingTagMode) {
-              const endIndex = remaining.indexOf("</think>");
-              if (endIndex !== -1) {
-                const chunk = remaining.slice(0, endIndex);
-                if (chunk) yield { type: "thinking", delta: chunk };
-                isThinkingTagMode = false;
-                remaining = remaining.slice(endIndex + 8);
-              } else {
-                yield { type: "thinking", delta: remaining };
-                remaining = "";
-              }
-            } else {
-              const startIndex = remaining.indexOf("<think>");
-              if (startIndex !== -1) {
-                const chunk = remaining.slice(0, startIndex);
-                if (chunk) yield { type: "text", delta: chunk };
-                isThinkingTagMode = true;
-                remaining = remaining.slice(startIndex + 7);
-              } else {
-                yield { type: "text", delta: remaining };
-                remaining = "";
-              }
-            }
-          }
+          yield* splitThinking(delta.content);
         }
       }
     } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        yield {
-          type: "error",
-          code: LLMErrorCode.Aborted,
-          message: "Request aborted",
-        };
-        return;
-      }
-      yield {
-        type: "error",
-        code: LLMErrorCode.NetworkError,
-        message: (err as Error).message,
-      };
+      yield streamErrorToChunk(err);
     }
   },
 };

@@ -2,6 +2,7 @@ import { register } from "../registry";
 import { responseToError } from "../errors";
 import { LLMErrorCode } from "../types";
 import type { LLMProvider, LLMChunk, LLMMessage } from "../types";
+import { streamErrorToChunk } from "../streaming";
 
 const ANTHROPIC_VERSION = "2023-06-01";
 const ANTHROPIC_BASE = "https://api.anthropic.com/v1"
@@ -69,11 +70,7 @@ const anthropic: LLMProvider = {
         body: JSON.stringify(payload),
       });
     } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        yield { type: "error", code: LLMErrorCode.Aborted, message: "Request aborted" };
-        return;
-      }
-      yield { type: "error", code: LLMErrorCode.NetworkError, message: (err as Error).message };
+      yield streamErrorToChunk(err);
       return;
     }
 
@@ -141,11 +138,7 @@ const anthropic: LLMProvider = {
         }
       }
     } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        yield { type: "error", code: LLMErrorCode.Aborted, message: "Stream aborted" };
-        return;
-      }
-      yield { type: "error", code: LLMErrorCode.NetworkError, message: (err as Error).message };
+      yield streamErrorToChunk(err, "Stream aborted");
     } finally {
       reader.releaseLock();
     }

@@ -292,6 +292,7 @@ export interface MemoryOperations {
 export interface HookContexts {
   input: InputHookContext & {
     memoriesOperations: MemoryOperations;
+    storyCardOperations: StoryCardOperations;
     /**
      * System messages collected by `ctx.inject(...)` during the input hook.
      * Populated by the worker and read by the engine, which splices them
@@ -304,13 +305,14 @@ export interface HookContexts {
       memories: readonly Memory[];
       storyCards: readonly StoryCard[];
     },
-    messages: ContextMessage[], 
-    estimatedTokens: number, 
+    messages: ContextMessage[],
+    estimatedTokens: number,
     activeStoryCards: StoryCard[],
     essentials: string,
     scriptState: string
   ) => BuildContextHookContext & {
     memoriesOperations: MemoryOperations;
+    storyCardOperations: StoryCardOperations;
   };
   output: (
     state: {
@@ -354,12 +356,6 @@ export function createHookContexts(params: {
     storyCards: Object.freeze([...story.storyCards]),
   });
 
-  const storyCardOperations: StoryCardOperations = {
-    add: [],
-    edit: [],
-    delete: [],
-  }
-
   const memoryOperationsBuilder = (source: {
     memories: readonly Memory[];
     storyCards: readonly StoryCard[];
@@ -393,6 +389,44 @@ export function createHookContexts(params: {
     return {addMemory, editMemory, removeMemory, memoriesOperations}
   }
 
+  type StoryCardInput = Omit<StoryCard, "id" | "createdAt" | "updatedAt">;
+
+  const storyCardOperationsBuilder = (source: {
+    memories: readonly Memory[];
+    storyCards: readonly StoryCard[];
+  }) => {
+    const storyCardOperations: StoryCardOperations = {
+      add: [],
+      edit: [],
+      delete: [],
+    }
+    const addStoryCard = (card: StoryCardInput) => { storyCardOperations.add.push(card); }
+    const editStoryCard = (
+      id: string,
+      card: StoryCardInput | ((prev: StoryCardInput) => StoryCardInput),
+    ) => {
+      if (storyCardOperations.delete.some(m => m.id === id)) return;
+      const pendingEdit = storyCardOperations.edit.find(e => e.id === id);
+      const baseContent = pendingEdit
+        ? pendingEdit.next
+        : source.storyCards.find(s => s.id === id);
+      if (!baseContent) return;
+      const nextContent = typeof card === "function" ? card(baseContent) : card;
+      if (pendingEdit) {
+        pendingEdit.next = nextContent;
+      } else {
+        const prevCard = source.storyCards.find(m => m.id === id)!;
+        storyCardOperations.edit.push({id, prev: prevCard, next: nextContent});
+      }
+    }
+    const removeStoryCard = (id: string) => {
+      const prevStoryCard = source.storyCards.find(c => c.id === id);
+      if (!prevStoryCard) return;
+      storyCardOperations.delete.push(prevStoryCard);
+    }
+    return {addStoryCard, editStoryCard, removeStoryCard, storyCardOperations}
+  }
+
   const base = {
     state: stateSnapshot,
     kvMemory: makeMemoryProxy(story.kvMemory),
@@ -400,9 +434,12 @@ export function createHookContexts(params: {
     console: logger,
     stop: (reason = "") => { stopFlag.stopped = true; stopFlag.reason = reason; },
     cancel: (reason = "") => { stopFlag.canceled = true; stopFlag.reason = reason; },
-    ai: { stream: scriptStream },  
+    ai: { stream: scriptStream },
     essentials: params.essentials,
     scriptState: params.scriptState,
+    // Any hook may suppress the end-of-turn summarizer; the engine ORs the
+    // per-phase values, so the turn is summarized only if no hook opted out.
+    suppressDefaultSummarizer: false,
     currentTurnIds: {
       user: params.userMsgId
     }
@@ -417,6 +454,7 @@ export function createHookContexts(params: {
     },
     _injected: injectedMessages,
     ...memoryOperationsBuilder(base.state),
+    ...storyCardOperationsBuilder(base.state),
   };
 
   const buildContextFn = (
@@ -437,7 +475,8 @@ export function createHookContexts(params: {
     essentials,
     scriptState,
     activeStoryCards: Object.freeze([...activeStoryCards]),
-    ...memoryOperationsBuilder(state)
+    ...memoryOperationsBuilder(state),
+    ...storyCardOperationsBuilder(state),
   });
 
   const outputFn = (
@@ -464,29 +503,7 @@ export function createHookContexts(params: {
     essentials,
     scriptState,
     ...memoryOperationsBuilder(state),
-    addStoryCard: (card) => { storyCardOperations.add.push(card); },
-    editStoryCard(id, card) {
-      if (storyCardOperations.delete.some(m => m.id === id)) return;
-      const pendingEdit = storyCardOperations.edit.find(e => e.id === id);
-      const baseContent = pendingEdit 
-        ? pendingEdit.next 
-        : state.storyCards.find(s => s.id === id);
-      if (!baseContent) return;
-      const nextContent = typeof card === "function" ? card(baseContent) : card;
-      if (pendingEdit) {
-        pendingEdit.next = nextContent;
-      } else {
-        const prevCard = state.storyCards.find(m => m.id === id)!;
-        storyCardOperations.edit.push({id, prev: prevCard, next: nextContent});
-      }
-    },
-    suppressDefaultSummarizer: false,
-    removeStoryCard(id) {
-      const prevStoryCard = state.storyCards.find(c => c.id === id);
-      if (!prevStoryCard) return;
-      storyCardOperations.delete.push(prevStoryCard);
-    },
-    storyCardOperations
+    ...storyCardOperationsBuilder(state),
   });
 
   return {
