@@ -2,15 +2,15 @@ import type { ScriptBundle } from "./stories";
 
 /**
  * Capabilities a plugin may declare. Shown to the user for consent at
- * install time. The hardened worker sandbox already blocks `network`;
- * fine-grained per-plugin enforcement of the others is a future step.
+ * install time. Fine-grained per-plugin enforcement is a future step.
+ * (There is no `network` capability — the sandbox blocks all network access
+ * unconditionally, so it could never be honored.)
  */
 export type PluginCapability =
   | "ai"
   | "kvMemory"
   | "memories"
-  | "storyCards"
-  | "network";
+  | "storyCards";
 
 /** A single configurable field, used to auto-generate the per-story config UI. */
 export interface PluginConfigField {

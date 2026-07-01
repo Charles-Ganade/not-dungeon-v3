@@ -6,7 +6,6 @@ import {
   stream as llmStream,
   createScriptStream,
   LLMChunk,
-  LLMMessage,
   ScriptStream,
 } from "@/services/llm";
 import { buildDefaultContext } from "./context_builder";
@@ -21,9 +20,9 @@ import {
   StoryCardOperations,
 } from "./script_runner";
 import type { HistoryMessage, ThinkingBlock } from "@/core/types/stories";
-import type { ContextMessage } from "@/core/types/hooks";
 import { summarizeHistory } from "./summarizer";
 import { unwrap } from "solid-js/store";
+import { isEqual } from "lodash";
 
 const [streamingText, setStreamingText] = createSignal("");
 const [streamingThinking, setStreamingThinking] = createSignal("");
@@ -257,7 +256,7 @@ async function generate(options: {
     config,
     scriptStream,
     essentials: story.essentials,
-    scriptState: story.scriptState,
+    scriptState: unwrap(story.scriptState),
     onLog,
     userMsgId: finalUserMsgId,
     assistantMsgId,
@@ -266,7 +265,7 @@ async function generate(options: {
   try {
     if (userMsg) {
       const prevEssentials = story.essentials;
-      const prevScriptState = story.scriptState;
+      const prevScriptState = unwrap(story.scriptState);
       await runPhaseWithPlugins(
         "input",
         scriptBundle.library,
@@ -287,7 +286,7 @@ async function generate(options: {
         });
       }
 
-      if (hookCtxs.input.scriptState !== prevScriptState) {
+      if (!isEqual(hookCtxs.input.scriptState, prevScriptState)) {
         sessionStore.enqueue({
           type: "scriptState:edit",
           prev: prevScriptState,
@@ -367,7 +366,7 @@ async function generate(options: {
 
     const buildCtx = hookCtxs.buildContext(
       getCurrentStateSnapshot(),
-      defaultCtx.messages as ContextMessage[],
+      defaultCtx.messages,
       defaultCtx.estimatedTokens,
       defaultCtx.activeStoryCards,
       hookCtxs.input.essentials,
@@ -394,7 +393,7 @@ async function generate(options: {
       });
     }
 
-    if (buildCtx.scriptState !== hookCtxs.input.scriptState) {
+    if (!isEqual(buildCtx.scriptState, hookCtxs.input.scriptState)) {
       sessionStore.enqueue({
         type: "scriptState:edit",
         prev: hookCtxs.input.scriptState,
@@ -413,7 +412,7 @@ async function generate(options: {
     if (notes && buildCtx.messages && buildCtx.messages.length > 0) {
       const length = buildCtx.messages.length;
       const last = buildCtx.messages[length - 1];
-      last.content += `\n\n[SPECIAL NOTES]\n${notes}\n`;
+      last.text += `\n\n[SPECIAL NOTES]\n${notes}\n`;
       buildCtx.messages[length - 1] = last;
     }
 
@@ -431,7 +430,10 @@ async function generate(options: {
       config.providerId,
       {
         model: config.model,
-        messages: buildCtx.messages as LLMMessage[],
+        messages: buildCtx.messages.map((m) => ({
+          role: m.role,
+          content: m.text,
+        })),
         params: config.params,
       },
       config.endpoint,
@@ -507,7 +509,7 @@ async function generate(options: {
       });
     }
 
-    if (!outputTimedOut && outputCtx.scriptState !== buildCtx.scriptState) {
+    if (!outputTimedOut && !isEqual(outputCtx.scriptState, buildCtx.scriptState)) {
       sessionStore.enqueue({
         type: "scriptState:edit",
         prev: buildCtx.scriptState,

@@ -183,12 +183,12 @@ export interface Story {
   essentials: string;
  
   /**
-   * A JSON string (or any string) never sent to the AI.
+   * A JSON-serialisable object never sent to the AI.
    * Used by scripts as persistent hook state across turns.
    * Readable and mutable by hooks — mutations are delta-tracked.
    * Not present on Scenario — this is per-playthrough only.
    */
-  scriptState: string;
+  scriptState: Record<string, unknown>;
 
   /**
    * key value memory that persists. Does not get tracked by deltas,

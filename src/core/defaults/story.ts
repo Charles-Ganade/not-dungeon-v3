@@ -15,7 +15,7 @@ export function makeDefaultStory(
     authorNotes: "",
     instructions: "",
     essentials: "",
-    scriptState: "",
+    scriptState: {},
     kvMemory:{},
     messages: [],
     currentLeafId: null,

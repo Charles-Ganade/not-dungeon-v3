@@ -120,6 +120,28 @@ function validateMessageTree(
   }
 }
 
+/**
+ * Normalizes a story's `scriptState` to an object. It used to be a free-form
+ * string (often serialized JSON); legacy stories and bundles are migrated here:
+ * a JSON string parses to its object, anything else falls back to `{}`.
+ */
+export function coerceScriptState(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // not JSON — fall through to empty state
+    }
+  }
+  return {};
+}
+
 function validateStory(value: unknown): Story {
   if (typeof value !== "object" || value === null) {
     throw new Error('Invalid bundle — "story" must be an object.');
@@ -141,9 +163,8 @@ function validateStory(value: unknown): Story {
   if (typeof s.kvMemory !== "object" || s.kvMemory === null) {
     throw new Error('Story "kvMemory" must be an object.');
   }
-  if (typeof s.scriptState !== "string") {
-    throw new Error('Story "scriptState" must be a string.');
-  }
+  // scriptState migrated from a legacy string to an object; coerce in place.
+  s.scriptState = coerceScriptState(s.scriptState);
   if (typeof s.scripts !== "object" || s.scripts === null) {
     throw new Error('Story "scripts" must be an object.');
   }

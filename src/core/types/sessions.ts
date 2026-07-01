@@ -54,10 +54,10 @@ export type Delta =
       prev: string; 
       next: string 
     }
-  | { 
+  | {
       type: "scriptState:edit";
-      prev: string;
-      next: string
+      prev: Record<string, unknown>;
+      next: Record<string, unknown>
     };
 
 /**

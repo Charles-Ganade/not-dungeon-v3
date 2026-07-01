@@ -2,6 +2,16 @@ import type { HistoryMessage, Memory, ResolvedConfig, StoryCard } from "./storie
 import type { ScriptStream } from "@/services/llm/types";
 
 /**
+ * The subset of the resolved config exposed to scripts. Connection secrets
+ * (`apiKey`, `endpoint`, `providerId`) are deliberately withheld — scripts
+ * reach the model through `ctx.ai`, never the raw credentials.
+ */
+export type ScriptConfig = Omit<
+  ResolvedConfig,
+  "apiKey" | "endpoint" | "providerId"
+>;
+
+/**
  * Fields available to all three script files (input.js, buildContext.js, output.js).
  * Scripts access these as top-level properties on the `ctx` object.
  */
@@ -29,11 +39,11 @@ export interface BaseHookContext {
   essentials: string;
 
   /**
-   * A persistent string for script state. Never sent to the AI.
-   * Useful for storing serialized JSON between turns. Mutable —
-   * changes are delta-tracked.
+   * A persistent object for script state. Never sent to the AI. Store any
+   * JSON-serialisable data here to persist it between turns. Mutable — assign
+   * a new object, or mutate keys in place; changes are delta-tracked.
    */
-  scriptState: string;
+  scriptState: Record<string, unknown>;
 
   /**
    * Adds a memory to the story. Enqueued as a delta.
@@ -98,10 +108,11 @@ export interface BaseHookContext {
   };
 
   /**
-   * The resolved configuration for this turn.
-   * Read-only — model params cannot be changed mid-turn.
+   * The resolved configuration for this turn (model, params, prompts,
+   * author's notes). Read-only — params cannot be changed mid-turn.
+   * Connection secrets (apiKey/endpoint/providerId) are not exposed.
    */
-  readonly config: Readonly<ResolvedConfig>;
+  readonly config: Readonly<ScriptConfig>;
 
   /**
    * Run a secondary AI call using the active provider and resolved
@@ -153,11 +164,19 @@ export interface InputHookContext extends BaseHookContext {
 }
 
 /**
- * A single message entry in the array sent to the API.
+ * A single message entry in the array sent to the API. Uses `text` (matching
+ * `HistoryMessage`) so scripts see one consistent shape across `ctx.state.messages`
+ * and `ctx.messages`.
  */
 export interface ContextMessage {
+  /**
+   * The `HistoryMessage.id` this entry was derived from, or `null` for
+   * engine-generated entries with no source message (the system prompt,
+   * hook-injected messages, and the trailing narrator kicker).
+   */
+  id: string | null;
   role: "system" | "user" | "assistant";
-  content: string;
+  text: string;
 }
 
 /**

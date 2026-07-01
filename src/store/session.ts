@@ -18,6 +18,8 @@ import type {
 import type { Session, Delta, DeltaTransaction } from "@/core/types/sessions";
 import type { EnabledPlugin } from "@/core/types/plugins";
 import { validateActiveMemories } from "@/core/engine/context_builder";
+import { coerceScriptState } from "@/core/utils/storyIO";
+import { isEqual } from "lodash";
 
 interface SessionState {
   story: Story | null;
@@ -90,7 +92,13 @@ function scheduleSave(): void {
 async function open(story: Story): Promise<void> {
   const now = Date.now();
   await touchStory(story.id);
-  const activeStory = { ...story, lastPlayedAt: now };
+  // Migrate legacy string scriptState (and guard bad data) as the story enters
+  // the session — the single choke point for both DB-loaded and new stories.
+  const activeStory = {
+    ...story,
+    scriptState: coerceScriptState(story.scriptState),
+    lastPlayedAt: now,
+  };
   libraryStore.syncStory(activeStory);
 
   const session: Session = {
@@ -421,15 +429,15 @@ export function editEssentials(newText: string): void {
  * Changes are tracked as deltas and fully undoable.
  * Used for maintaining script-controlled game state that persists across turns.
  */
-export function editScriptState(newText: string): void {
+export function editScriptState(newState: Record<string, unknown>): void {
   const story = sessionStore.story;
-  if (!story || story.scriptState === newText) return;
+  if (!story || isEqual(unwrap(story.scriptState), newState)) return;
 
   sessionStore.beginTransaction("Edit script state");
   sessionStore.enqueue({
     type: "scriptState:edit",
-    prev: story.scriptState,
-    next: newText,
+    prev: unwrap(story.scriptState),
+    next: newState,
   });
   sessionStore.commit();
 }

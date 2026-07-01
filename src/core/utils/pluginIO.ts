@@ -15,7 +15,6 @@ const CAPABILITIES: PluginCapability[] = [
   "kvMemory",
   "memories",
   "storyCards",
-  "network",
 ];
 
 const FIELD_TYPES: PluginConfigField["type"][] = [

@@ -6,7 +6,7 @@ import type {
   InputHookContext,
   BuildContextHookContext,
   OutputHookContext,
-  BaseHookContext,
+  ScriptConfig,
 } from "@/core/types/hooks";
 import type { ContextMessage } from "@/core/types/hooks";
 import type { ScriptStream } from "@/services/llm/types";
@@ -309,7 +309,7 @@ export interface HookContexts {
     estimatedTokens: number,
     activeStoryCards: StoryCard[],
     essentials: string,
-    scriptState: string
+    scriptState: Record<string, unknown>
   ) => BuildContextHookContext & {
     memoriesOperations: MemoryOperations;
     storyCardOperations: StoryCardOperations;
@@ -322,7 +322,7 @@ export interface HookContexts {
     output: string, 
     rawOutput: string,
     essentials: string,
-    scriptState: string
+    scriptState: Record<string, unknown>
   ) => OutputHookContext & {
     storyCardOperations: StoryCardOperations,
     memoriesOperations: MemoryOperations;
@@ -339,7 +339,7 @@ export function createHookContexts(params: {
   config: ResolvedConfig;
   scriptStream: ScriptStream;
   essentials: string;
-  scriptState: string;
+  scriptState: Record<string, unknown>;
   onLog?: (entry: ScriptLogEntry) => void;
   assistantMsgId: string;
   userMsgId: string | null;
@@ -427,10 +427,19 @@ export function createHookContexts(params: {
     return {addStoryCard, editStoryCard, removeStoryCard, storyCardOperations}
   }
 
+  // Expose only non-sensitive config to scripts — never the apiKey/endpoint/
+  // providerId. Scripts reach the model through `ctx.ai`, not raw credentials.
+  const scriptConfig: ScriptConfig = Object.freeze({
+    model: config.model,
+    authorNotes: config.authorNotes,
+    params: config.params,
+    prompts: config.prompts,
+  });
+
   const base = {
     state: stateSnapshot,
     kvMemory: makeMemoryProxy(story.kvMemory),
-    config: Object.freeze(config),
+    config: scriptConfig,
     console: logger,
     stop: (reason = "") => { stopFlag.stopped = true; stopFlag.reason = reason; },
     cancel: (reason = "") => { stopFlag.canceled = true; stopFlag.reason = reason; },
@@ -450,7 +459,7 @@ export function createHookContexts(params: {
     ...base,
     input: inputText,
     inject: (text: string) => {
-      injectedMessages.push({ role: "system", content: text });
+      injectedMessages.push({ id: null, role: "system", text });
     },
     _injected: injectedMessages,
     ...memoryOperationsBuilder(base.state),
@@ -466,7 +475,7 @@ export function createHookContexts(params: {
     estimatedTokens: number,
     activeStoryCards: StoryCard[], 
     essentials: string, 
-    scriptState: string
+    scriptState: Record<string, unknown>
   ) => ({
     ...base,
     state: {...base.state, ...state},
@@ -487,7 +496,7 @@ export function createHookContexts(params: {
     output: string, 
     rawOutput: string, 
     essentials: string, 
-    scriptState: string
+    scriptState: Record<string, unknown>
   ): OutputHookContext & {
     storyCardOperations: StoryCardOperations,
     memoriesOperations: MemoryOperations;

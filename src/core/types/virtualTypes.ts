@@ -38,7 +38,7 @@ interface BaseHookContext {
     readonly user: string | null;
   };
   essentials: string;
-  scriptState: string;
+  scriptState: Record<string, unknown>;
   addMemory(memory: {
     content: string;
     messageIds: string[];
@@ -84,9 +84,6 @@ interface BaseHookContext {
     all(): Record<string, unknown>;
   };
   readonly config: Readonly<{
-    providerId: string;
-    endpoint: string;
-    apiKey: string;
     model: string;
     authorNotes: string;
     params: {
@@ -138,8 +135,9 @@ declare const ctx: InputHookContext;` as HookContext;
 export const buildContextHookContext = `${baseContext}
 interface BuildContextHookContext extends BaseHookContext {
   messages: {
+    id: string | null;
     role: "system" | "user" | "assistant";
-    content: string;
+    text: string;
   }[];
   readonly estimatedTokens: number;
   readonly activeStoryCards: readonly {

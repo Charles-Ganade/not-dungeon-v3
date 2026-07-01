@@ -1,6 +1,6 @@
 import type { HistoryMessage, Memory, StoryCard } from "@/core/types/stories";
 import type { ResolvedConfig } from "@/core/types/stories";
-import type { LLMMessage } from "@/services/llm/types";
+import type { ContextMessage } from "@/core/types/hooks";
 import { countTokens } from "./tokenizer";
 
 export interface ContextBuilderInput {
@@ -17,11 +17,11 @@ export interface ContextBuilderInput {
    * Inserted directly after the default system message and counted in
    * the token budget. Defaults to none.
    */
-  injectedMessages?: LLMMessage[];
+  injectedMessages?: ContextMessage[];
 }
 
 export interface ContextBuilderOutput {
-  messages: LLMMessage[];
+  messages: ContextMessage[];
   /** Token count (model tokenizer). Used by the buildContext hook. */
   estimatedTokens: number;
   /** Story cards whose triggers matched the recent context. */
@@ -91,9 +91,9 @@ export function resolveTriggerWindow(
  * 3. Keep the most recent N messages for narrative continuity
  */
 export function truncateToFit(
-  messages: LLMMessage[],
+  messages: ContextMessage[],
   targetTokens: number,
-): { truncated: LLMMessage[]; removedCount: number } {
+): { truncated: ContextMessage[]; removedCount: number } {
   if (messages.length <= 1) return { truncated: messages, removedCount: 0 };
 
   // Preserve the leading run of system messages — the default system prompt
@@ -109,16 +109,16 @@ export function truncateToFit(
   const historyMsgs = messages.slice(headerEnd);
 
   let currentTokens = header.reduce(
-    (sum, msg) => sum + countTokens(msg.content),
+    (sum, msg) => sum + countTokens(msg.text),
     0,
   );
   let removedCount = 0;
 
-  const keptHistory: LLMMessage[] = [];
+  const keptHistory: ContextMessage[] = [];
 
   for (let i = historyMsgs.length - 1; i >= 0; i--) {
     const msg = historyMsgs[i];
-    const msgTokens = countTokens(msg.content);
+    const msgTokens = countTokens(msg.text);
 
     if (
       i === historyMsgs.length - 1 ||
@@ -194,9 +194,9 @@ export function validateActiveMemories(
   });
 }
 
-/** Sums the token counts of every message's content (uses the cached tokenizer). */
-function sumTokens(messages: LLMMessage[]): number {
-  return messages.reduce((sum, msg) => sum + countTokens(msg.content), 0);
+/** Sums the token counts of every message's text (uses the cached tokenizer). */
+function sumTokens(messages: ContextMessage[]): number {
+  return messages.reduce((sum, msg) => sum + countTokens(msg.text), 0);
 }
 
 /**
@@ -280,14 +280,14 @@ export function buildDefaultContext(
     (m) => !memorizedIds.has(m.id) && m.role !== "system",
   );
 
-  const historyMessages: LLMMessage[] = unsummarized.map((m) => {
+  const historyMessages: ContextMessage[] = unsummarized.map((m) => {
     let text = m.text;
 
     if (m.role === "user") {
       text = text.replace(/^>\s*/, "");
     }
 
-    return { role: m.role as "user" | "assistant", content: text };
+    return { id: m.id, role: m.role as "user" | "assistant", text };
   });
 
   const systemMsg = systemParts.join("\n\n");
@@ -306,19 +306,20 @@ export function buildDefaultContext(
     const lastMsg = historyMessages[historyMessages.length - 1];
 
     if (lastMsg.role === "user") {
-      lastMsg.content += `\n\n---\n${kickerText}`;
+      lastMsg.text += `\n\n---\n${kickerText}`;
     } else {
-      historyMessages.push({ role: "user", content: kickerText });
+      historyMessages.push({ id: null, role: "user", text: kickerText });
     }
   } else {
     historyMessages.push({
+      id: null,
       role: "user",
-      content: `(The story begins.)\n\n---\n${kickerText}`,
+      text: `(The story begins.)\n\n---\n${kickerText}`,
     });
   }
 
-  let messages: LLMMessage[] = [
-    { role: "system", content: systemMsg },
+  let messages: ContextMessage[] = [
+    { id: null, role: "system", text: systemMsg },
     ...injectedMessages,
     ...historyMessages,
   ];

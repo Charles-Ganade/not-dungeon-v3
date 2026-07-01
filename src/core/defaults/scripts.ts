@@ -23,7 +23,7 @@ export const DEFAULT_SCRIPT_INPUT = `\
 //   ctx.input               — the player's raw input text (mutable)
 //   ctx.currentTurnIds      — { user: string | null } (read-only)
 //   ctx.essentials          — the story's essentials field (mutable)
-//   ctx.scriptState         — persistent script state string (mutable)
+//   ctx.scriptState         — persistent script state object (mutable)
 //   ctx.suppressDefaultSummarizer — set to true to skip auto-summarization (mutable)
 //   ctx.state               — read-only snapshot of messages, memories, story cards
 //   ctx.kvMemory            — persistent key-value store (get, set, delete, all)
@@ -56,7 +56,7 @@ export const DEFAULT_SCRIPT_BUILD_CONTEXT = `\
 //   ctx.activeStoryCards    — story cards that matched the recent context (read-only)
 //   ctx.currentTurnIds      — { user: string | null } (read-only)
 //   ctx.essentials          — the story's essentials field (mutable)
-//   ctx.scriptState         — persistent script state string (mutable)
+//   ctx.scriptState         — persistent script state object (mutable)
 //   ctx.suppressDefaultSummarizer — set to true to skip auto-summarization (mutable)
 //   ctx.state               — read-only snapshot of messages, memories, story cards
 //   ctx.kvMemory            — persistent key-value store (get, set, delete, all)
@@ -88,7 +88,7 @@ export const DEFAULT_SCRIPT_OUTPUT = `\
 //   ctx.currentTurnIds            — { user: string | null, assistant: string } (read-only)
 //   ctx.suppressDefaultSummarizer — set to true to skip auto-summarization (mutable)
 //   ctx.essentials                — the story's essentials field (mutable)
-//   ctx.scriptState               — persistent script state string (mutable)
+//   ctx.scriptState               — persistent script state object (mutable)
 //   ctx.state                     — read-only snapshot of messages, memories, story cards
 //   ctx.kvMemory                  — persistent key-value store (get, set, delete, all)
 //   ctx.config                    — resolved config (model, params, prompts)

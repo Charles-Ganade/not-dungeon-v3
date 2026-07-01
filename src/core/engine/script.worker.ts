@@ -158,7 +158,7 @@ const runnerApi = {
       },
       inject: (text: string) => {
         if (!ctx._injected) ctx._injected = [];
-        ctx._injected.push({ role: "system", content: text });
+        ctx._injected.push({ id: null, role: "system", text });
       },
       // Read-only resolved config for the running plugin ({} for
       // scenario/story scripts, which aren't plugins).
